@@ -7,9 +7,13 @@ import open3d.visualization.rendering as rendering
 import os
 import platform
 import sys
+import pathlib
 
 isMacOS = (platform.system() == "Darwin")
 
+current_scene = 0
+scenes_path = ''
+objects_path = ''
 
 class Settings:
     UNLIT = "defaultUnlit"
@@ -293,6 +297,7 @@ class AppWindow:
         # of properties they rarely use.
         view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
                                          gui.Margins(em, 0, 0, 0))
+        view_ctrls.set_is_open(False)
 
         self._arcball_button = gui.Button("Arcball")
         self._arcball_button.horizontal_padding_em = 0.5
@@ -419,6 +424,7 @@ class AppWindow:
 
         material_settings = gui.CollapsableVert("Material settings", 0,
                                                 gui.Margins(em, 0, 0, 0))
+        material_settings.set_is_open(False)
 
         self._shader = gui.Combobox()
         self._shader.add_item(AppWindow.MATERIAL_NAMES[0])
@@ -466,23 +472,23 @@ class AppWindow:
         # 3D Annotation tool options
         annotation_objects = gui.CollapsableVert("Annotation Objects", 0.33 * em,
                                                 gui.Margins(em, 0, 0, 0))
-        #v1 = gui.Vert(0.15 * em)
-        #v2 = gui.Vert(0.15 * em)
         mesh_available = gui.ListView()
         mesh_available.set_items(["bottle", "can"])
         mesh_available.selected_index = 2
         mesh_used = gui.ListView()
         mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
+        remove_mesh_button = gui.Button("Remove mesh")
         annotation_objects.add_child(mesh_available)
         annotation_objects.add_child(mesh_used)
-        generate_save_annotation = gui.Button("generate - save/update")
-        annotation_objects.add_child(generate_save_annotation)
+        annotation_objects.add_child(remove_mesh_button)
         self._settings_panel.add_child(annotation_objects)
 
         scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
                                                  gui.Margins(em, 0, 0, 0))
         pre_button = gui.Button("Previous")
         next_button = gui.Button("Next")
+        generate_save_annotation = gui.Button("generate - save/update")
+        scene_control.add_child(generate_save_annotation)
         scene_control.add_child(pre_button)
         scene_control.add_child(next_button)
         self._settings_panel.add_child(scene_control)
@@ -498,7 +504,7 @@ class AppWindow:
                 app_menu.add_separator()
                 app_menu.add_item("Quit", AppWindow.MENU_QUIT)
             file_menu = gui.Menu()
-            file_menu.add_item("Open Annotation folder", AppWindow.MENU_OPEN)
+            #file_menu.add_item("Open Annotation Folder", AppWindow.MENU_OPEN)
             file_menu.add_item("Export Current Image...", AppWindow.MENU_EXPORT)
             if not isMacOS:
                 file_menu.add_separator()
@@ -530,7 +536,7 @@ class AppWindow:
         # The menubar is global, but we need to connect the menu items to the
         # window, so that the window can call the appropriate function when the
         # menu item is activated.
-        w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
+        #w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
         w.set_on_menu_item_activated(AppWindow.MENU_EXPORT,
                                      self._on_menu_export)
         w.set_on_menu_item_activated(AppWindow.MENU_QUIT, self._on_menu_quit)
@@ -628,36 +634,36 @@ class AppWindow:
         self.settings.apply_material = True
         self._apply_settings()
 
-    def _on_menu_open(self):
-        dlg = gui.FileDialog(gui.FileDialog.OPEN, "Choose file to load",
-                             self.window.theme)
-        dlg.add_filter(
-            ".ply .stl .fbx .obj .off .gltf .glb",
-            "Triangle mesh files (.ply, .stl, .fbx, .obj, .off, "
-            ".gltf, .glb)")
-        dlg.add_filter(
-            ".xyz .xyzn .xyzrgb .ply .pcd .pts",
-            "Point cloud files (.xyz, .xyzn, .xyzrgb, .ply, "
-            ".pcd, .pts)")
-        dlg.add_filter(".ply", "Polygon files (.ply)")
-        dlg.add_filter(".stl", "Stereolithography files (.stl)")
-        dlg.add_filter(".fbx", "Autodesk Filmbox files (.fbx)")
-        dlg.add_filter(".obj", "Wavefront OBJ files (.obj)")
-        dlg.add_filter(".off", "Object file format (.off)")
-        dlg.add_filter(".gltf", "OpenGL transfer files (.gltf)")
-        dlg.add_filter(".glb", "OpenGL binary transfer files (.glb)")
-        dlg.add_filter(".xyz", "ASCII point cloud files (.xyz)")
-        dlg.add_filter(".xyzn", "ASCII point cloud with normals (.xyzn)")
-        dlg.add_filter(".xyzrgb",
-                       "ASCII point cloud files with colors (.xyzrgb)")
-        dlg.add_filter(".pcd", "Point Cloud Data files (.pcd)")
-        dlg.add_filter(".pts", "3D Points files (.pts)")
-        dlg.add_filter("", "All files")
+    #def _on_menu_open(self):
+    #    dlg = gui.FileDialog(gui.FileDialog.OPEN, "Choose file to load",
+    #                         self.window.theme)
+    #    dlg.add_filter(
+    #        ".ply .stl .fbx .obj .off .gltf .glb",
+    #        "Triangle mesh files (.ply, .stl, .fbx, .obj, .off, "
+    #        ".gltf, .glb)")
+    #    dlg.add_filter(
+    #        ".xyz .xyzn .xyzrgb .ply .pcd .pts",
+    #        "Point cloud files (.xyz, .xyzn, .xyzrgb, .ply, "
+    #        ".pcd, .pts)")
+    #    dlg.add_filter(".ply", "Polygon files (.ply)")
+    #    dlg.add_filter(".stl", "Stereolithography files (.stl)")
+    #    dlg.add_filter(".fbx", "Autodesk Filmbox files (.fbx)")
+    #    dlg.add_filter(".obj", "Wavefront OBJ files (.obj)")
+    #    dlg.add_filter(".off", "Object file format (.off)")
+    #    dlg.add_filter(".gltf", "OpenGL transfer files (.gltf)")
+    #    dlg.add_filter(".glb", "OpenGL binary transfer files (.glb)")
+    #    dlg.add_filter(".xyz", "ASCII point cloud files (.xyz)")
+    #    dlg.add_filter(".xyzn", "ASCII point cloud with normals (.xyzn)")
+    #    dlg.add_filter(".xyzrgb",
+    #                   "ASCII point cloud files with colors (.xyzrgb)")
+    #    dlg.add_filter(".pcd", "Point Cloud Data files (.pcd)")
+    #    dlg.add_filter(".pts", "3D Points files (.pts)")
+    #    dlg.add_filter("", "All files")
 
-        # A file dialog MUST define on_cancel and on_done functions
-        dlg.set_on_cancel(self._on_file_dialog_cancel)
-        dlg.set_on_done(self._on_load_dialog_done)
-        self.window.show_dialog(dlg)
+    #    # A file dialog MUST define on_cancel and on_done functions
+    #    dlg.set_on_cancel(self._on_file_dialog_cancel)
+    #    dlg.set_on_done(self._on_load_dialog_done)
+    #    self.window.show_dialog(dlg)
 
     def _on_file_dialog_cancel(self):
         self.window.close_dialog()
@@ -789,13 +795,17 @@ def main():
 
     w = AppWindow(2048, 1536)
 
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-        if os.path.exists(path):
-            w.load(path)
-        else:
-            w.window.show_message_box("Error",
-                                      "Could not open file '" + path + "'")
+    global scenes_path, objects_path, current_scene
+
+    current = pathlib.Path().absolute()
+    scenes_path = os.path.join(os.path.join(current, 'meshes', 'scenes'))
+    objects_path = os.path.join(os.path.join(current, 'meshes', 'objects'))
+    if os.path.exists(scenes_path) and os.path.exists(objects_path):
+        current_scene = os.path.join(scenes_path, f"{0:05}" + '.pcd')  # TODO: change it to load last annotated object from json
+        w.load(current_scene)
+    else:
+        w.window.show_message_box("Error",
+                                  "Could not scenes or object meshes folders " + scenes_path + "/" + objects_path)
 
     # Run the event loop. This will not return until the last window is closed.
     gui.Application.instance.run()
