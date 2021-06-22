@@ -192,6 +192,67 @@ class AppWindow:
         Settings.LIT, Settings.UNLIT, Settings.NORMALS, Settings.DEPTH
     ]
 
+    def _apply_settings(self):
+        bg_color = [
+            self.settings.bg_color.red, self.settings.bg_color.green,
+            self.settings.bg_color.blue, self.settings.bg_color.alpha
+        ]
+        self._scene.scene.set_background(bg_color)
+        self._scene.scene.show_skybox(self.settings.show_skybox)
+        self._scene.scene.show_axes(self.settings.show_axes)
+        if self.settings.new_ibl_name is not None:
+            self._scene.scene.scene.set_indirect_light(
+                self.settings.new_ibl_name)
+            # Clear new_ibl_name, so we don't keep reloading this image every
+            # time the settings are applied.
+            self.settings.new_ibl_name = None
+        self._scene.scene.scene.enable_indirect_light(self.settings.use_ibl)
+        self._scene.scene.scene.set_indirect_light_intensity(
+            self.settings.ibl_intensity)
+        sun_color = [
+            self.settings.sun_color.red, self.settings.sun_color.green,
+            self.settings.sun_color.blue
+        ]
+        self._scene.scene.scene.set_sun_light(self.settings.sun_dir, sun_color,
+                                              self.settings.sun_intensity)
+        self._scene.scene.scene.enable_sun_light(self.settings.use_sun)
+
+        if self.settings.apply_material:
+            self._scene.scene.update_material(self.settings.material)
+            self.settings.apply_material = False
+
+        self._bg_color.color_value = self.settings.bg_color
+        self._show_skybox.checked = self.settings.show_skybox
+        self._show_axes.checked = self.settings.show_axes
+        self._use_ibl.checked = self.settings.use_ibl
+        self._use_sun.checked = self.settings.use_sun
+        self._ibl_intensity.int_value = self.settings.ibl_intensity
+        self._sun_intensity.int_value = self.settings.sun_intensity
+        self._sun_dir.vector_value = self.settings.sun_dir
+        self._sun_color.color_value = self.settings.sun_color
+        self._material_prefab.enabled = (
+            self.settings.material.shader == Settings.LIT)
+        c = gui.Color(self.settings.material.base_color[0],
+                      self.settings.material.base_color[1],
+                      self.settings.material.base_color[2],
+                      self.settings.material.base_color[3])
+        self._material_color.color_value = c
+        self._point_size.double_value = self.settings.material.point_size
+
+    def _on_layout(self, layout_context):
+        # The on_layout callback should set the frame (position + size) of every
+        # child correctly. After the callback is done the window will layout
+        # the grandchildren.
+        r = self.window.content_rect
+        self._scene.frame = r
+        width = 17 * layout_context.theme.font_size
+        height = min(
+            r.height,
+            self._settings_panel.calc_preferred_size(
+                layout_context, gui.Widget.Constraints()).height)
+        self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
+                                              height)
+
     def __init__(self, width, height):
         self.settings = Settings()
         resource_path = gui.Application.instance.resource_path
@@ -402,6 +463,31 @@ class AppWindow:
         w.add_child(self._scene)
         w.add_child(self._settings_panel)
 
+        # 3D Annotation tool options
+        annotation_objects = gui.CollapsableVert("Annotation Objects", 0.33 * em,
+                                                gui.Margins(em, 0, 0, 0))
+        #v1 = gui.Vert(0.15 * em)
+        #v2 = gui.Vert(0.15 * em)
+        mesh_available = gui.ListView()
+        mesh_available.set_items(["bottle", "can"])
+        mesh_available.selected_index = 2
+        mesh_used = gui.ListView()
+        mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
+        annotation_objects.add_child(mesh_available)
+        annotation_objects.add_child(mesh_used)
+        generate_save_annotation = gui.Button("generate - save/update")
+        annotation_objects.add_child(generate_save_annotation)
+        self._settings_panel.add_child(annotation_objects)
+
+        scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
+                                                 gui.Margins(em, 0, 0, 0))
+        pre_button = gui.Button("Previous")
+        next_button = gui.Button("Next")
+        scene_control.add_child(pre_button)
+        scene_control.add_child(next_button)
+        self._settings_panel.add_child(scene_control)
+
+
         # ---- Menu ----
         # The menu is global (because the macOS menu is global), so only create
         # it once, no matter how many windows are created
@@ -412,7 +498,7 @@ class AppWindow:
                 app_menu.add_separator()
                 app_menu.add_item("Quit", AppWindow.MENU_QUIT)
             file_menu = gui.Menu()
-            file_menu.add_item("Open...", AppWindow.MENU_OPEN)
+            file_menu.add_item("Open Annotation folder", AppWindow.MENU_OPEN)
             file_menu.add_item("Export Current Image...", AppWindow.MENU_EXPORT)
             if not isMacOS:
                 file_menu.add_separator()
@@ -454,67 +540,6 @@ class AppWindow:
         # ----
 
         self._apply_settings()
-
-    def _apply_settings(self):
-        bg_color = [
-            self.settings.bg_color.red, self.settings.bg_color.green,
-            self.settings.bg_color.blue, self.settings.bg_color.alpha
-        ]
-        self._scene.scene.set_background(bg_color)
-        self._scene.scene.show_skybox(self.settings.show_skybox)
-        self._scene.scene.show_axes(self.settings.show_axes)
-        if self.settings.new_ibl_name is not None:
-            self._scene.scene.scene.set_indirect_light(
-                self.settings.new_ibl_name)
-            # Clear new_ibl_name, so we don't keep reloading this image every
-            # time the settings are applied.
-            self.settings.new_ibl_name = None
-        self._scene.scene.scene.enable_indirect_light(self.settings.use_ibl)
-        self._scene.scene.scene.set_indirect_light_intensity(
-            self.settings.ibl_intensity)
-        sun_color = [
-            self.settings.sun_color.red, self.settings.sun_color.green,
-            self.settings.sun_color.blue
-        ]
-        self._scene.scene.scene.set_sun_light(self.settings.sun_dir, sun_color,
-                                              self.settings.sun_intensity)
-        self._scene.scene.scene.enable_sun_light(self.settings.use_sun)
-
-        if self.settings.apply_material:
-            self._scene.scene.update_material(self.settings.material)
-            self.settings.apply_material = False
-
-        self._bg_color.color_value = self.settings.bg_color
-        self._show_skybox.checked = self.settings.show_skybox
-        self._show_axes.checked = self.settings.show_axes
-        self._use_ibl.checked = self.settings.use_ibl
-        self._use_sun.checked = self.settings.use_sun
-        self._ibl_intensity.int_value = self.settings.ibl_intensity
-        self._sun_intensity.int_value = self.settings.sun_intensity
-        self._sun_dir.vector_value = self.settings.sun_dir
-        self._sun_color.color_value = self.settings.sun_color
-        self._material_prefab.enabled = (
-            self.settings.material.shader == Settings.LIT)
-        c = gui.Color(self.settings.material.base_color[0],
-                      self.settings.material.base_color[1],
-                      self.settings.material.base_color[2],
-                      self.settings.material.base_color[3])
-        self._material_color.color_value = c
-        self._point_size.double_value = self.settings.material.point_size
-
-    def _on_layout(self, layout_context):
-        # The on_layout callback should set the frame (position + size) of every
-        # child correctly. After the callback is done the window will layout
-        # the grandchildren.
-        r = self.window.content_rect
-        self._scene.frame = r
-        width = 17 * layout_context.theme.font_size
-        height = min(
-            r.height,
-            self._settings_panel.calc_preferred_size(
-                layout_context, gui.Widget.Constraints()).height)
-        self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
-                                              height)
 
     def _set_mouse_mode_rotate(self):
         self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
@@ -762,7 +787,7 @@ def main():
     # for rendering and prepares the cross-platform window abstraction.
     gui.Application.instance.initialize()
 
-    w = AppWindow(1024, 768)
+    w = AppWindow(2048, 1536)
 
     if len(sys.argv) > 1:
         path = sys.argv[1]
