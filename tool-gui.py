@@ -11,7 +11,7 @@ import pathlib
 
 isMacOS = (platform.system() == "Darwin")
 
-current_scene = 0
+current_scene_no = 0
 scenes_path = ''
 objects_path = ''
 
@@ -258,6 +258,7 @@ class AppWindow:
                                               height)
 
     def __init__(self, width, height):
+        global current_scene_no, scenes_path, objects_path
         self.settings = Settings()
         resource_path = gui.Application.instance.resource_path
         self.settings.new_ibl_name = resource_path + "/" + AppWindow.DEFAULT_IBL
@@ -472,13 +473,13 @@ class AppWindow:
         # 3D Annotation tool options
         annotation_objects = gui.CollapsableVert("Annotation Objects", 0.33 * em,
                                                 gui.Margins(em, 0, 0, 0))
-        mesh_available = gui.ListView()
-        mesh_available.set_items(["bottle", "can"])
-        mesh_available.selected_index = 2
+        self._meshes_available = gui.ListView()
+        #mesh_available.set_items(["bottle", "can"])
+        #mesh_available.selected_index = 0
         mesh_used = gui.ListView()
-        mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
+        #mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
         remove_mesh_button = gui.Button("Remove mesh")
-        annotation_objects.add_child(mesh_available)
+        annotation_objects.add_child(self._meshes_available)
         annotation_objects.add_child(mesh_used)
         annotation_objects.add_child(remove_mesh_button)
         self._settings_panel.add_child(annotation_objects)
@@ -487,6 +488,8 @@ class AppWindow:
                                                  gui.Margins(em, 0, 0, 0))
         pre_button = gui.Button("Previous")
         next_button = gui.Button("Next")
+        pre_button.set_on_clicked(self._on_previous_scene)
+        next_button.set_on_clicked(self._on_next_scene)
         generate_save_annotation = gui.Button("generate - save/update")
         scene_control.add_child(generate_save_annotation)
         scene_control.add_child(pre_button)
@@ -787,6 +790,27 @@ class AppWindow:
 
         self._scene.scene.scene.render_to_image(on_image)
 
+    def update_obj_list(self):
+        global objects_path
+        objects_list = os.listdir(objects_path)
+        objects_list = [x.split('.')[0] for x in objects_list]
+        self._meshes_available.set_items(objects_list)
+
+    def _on_next_scene(self):
+        # TODO handle overflow
+        global  current_scene_no
+        current_scene_no +=1
+        self.load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+
+    def _on_previous_scene(self):
+        # TODO handle underflow
+        global current_scene_no
+        current_scene_no -=1
+        self.load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+
+    def save_annotation(self):
+        pass
+
 
 def main():
     # We need to initalize the application, which finds the necessary shaders
@@ -795,17 +819,20 @@ def main():
 
     w = AppWindow(2048, 1536)
 
-    global scenes_path, objects_path, current_scene
+    global scenes_path, objects_path, current_scene_no
 
     current = pathlib.Path().absolute()
+    current_scene_no = 0
     scenes_path = os.path.join(os.path.join(current, 'meshes', 'scenes'))
     objects_path = os.path.join(os.path.join(current, 'meshes', 'objects'))
     if os.path.exists(scenes_path) and os.path.exists(objects_path):
-        current_scene = os.path.join(scenes_path, f"{0:05}" + '.pcd')  # TODO: change it to load last annotated object from json
-        w.load(current_scene)
+        path = os.path.join(scenes_path, f"{0:05}" + '.pcd')  # TODO: change it to load last annotated object from json
+        w.load(path)
+        w.update_obj_list()
     else:
         w.window.show_message_box("Error",
                                   "Could not scenes or object meshes folders " + scenes_path + "/" + objects_path)
+        exit()
 
     # Run the event loop. This will not return until the last window is closed.
     gui.Application.instance.run()
