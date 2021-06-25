@@ -15,6 +15,20 @@ current_scene_no = 0
 scenes_path = ''
 objects_path = ''
 
+class AnnotationScene:
+    def __init__(self, bin_scene):
+        self.bin_scene = bin_scene
+        self.obj_list = list()
+
+    def add_obj(self, obj):
+        self.obj_list.insert(0, self.SceneObject(obj))
+
+    class SceneObject:
+        def __init__(self, obj):
+            self._obj = obj
+            self.translation = [0,0,0]
+            self.orientation = [0,0,0]
+
 class Settings:
     UNLIT = "defaultUnlit"
     LIT = "defaultLit"
@@ -475,12 +489,15 @@ class AppWindow:
                                                 gui.Margins(em, 0, 0, 0))
         self._meshes_available = gui.ListView()
         #mesh_available.set_items(["bottle", "can"])
-        #mesh_available.selected_index = 0
-        mesh_used = gui.ListView()
+        self._meshes_used = gui.ListView()
         #mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
-        remove_mesh_button = gui.Button("Remove mesh")
+        add_mesh_button = gui.Button("Add Mesh")
+        remove_mesh_button = gui.Button("Remove Mesh")
+        add_mesh_button.set_on_clicked(self._add_mesh)
+        remove_mesh_button.set_on_clicked(self._remove_mesh)
         annotation_objects.add_child(self._meshes_available)
-        annotation_objects.add_child(mesh_used)
+        annotation_objects.add_child(add_mesh_button)
+        annotation_objects.add_child(self._meshes_used)
         annotation_objects.add_child(remove_mesh_button)
         self._settings_panel.add_child(annotation_objects)
 
@@ -549,6 +566,8 @@ class AppWindow:
         # ----
 
         self._apply_settings()
+
+        self._annotation_scene = None
 
     def _set_mouse_mode_rotate(self):
         self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
@@ -728,55 +747,44 @@ class AppWindow:
     def _on_about_ok(self):
         self.window.close_dialog()
 
-    def load(self, path):
+    def _add_mesh(self):
+        object_geometry = o3d.io.read_point_cloud(objects_path + '/' + self._meshes_available.selected_value + '.pcd')
+        self._annotation_scene.add_obj(object_geometry)
+        new_mesh_name = str(self._meshes_available.selected_value) + '_' + str(self._meshes_available.selected_index)
+        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
+        self._meshes_used.set_items([new_mesh_name]) # TODO add a handler to keep list of items and add set them all at once
+        #TODO check if there is a mesh of the same type then add _02 at the name end
+
+    def _remove_mesh(self):
+        pass
+
+    def scene_load(self, path):
         self._scene.scene.clear_geometry()
 
         geometry = None
-        geometry_type = o3d.io.read_file_geometry_type(path)
+        cloud = None
 
-        mesh = None
-        if geometry_type & o3d.io.CONTAINS_TRIANGLES:
-            mesh = o3d.io.read_triangle_mesh(path)
-        if mesh is not None:
-            if len(mesh.triangles) == 0:
-                print(
-                    "[WARNING] Contains 0 triangles, will read as point cloud")
-                mesh = None
-            else:
-                mesh.compute_vertex_normals()
-                if len(mesh.vertex_colors) == 0:
-                    mesh.paint_uniform_color([1, 1, 1])
-                geometry = mesh
-            # Make sure the mesh has texture coordinates
-            if not mesh.has_triangle_uvs():
-                uv = np.array([[0.0, 0.0]] * (3 * len(mesh.triangles)))
-                mesh.triangle_uvs = o3d.utility.Vector2dVector(uv)
+        try:
+            cloud = o3d.io.read_point_cloud(path)
+        except Exception:
+            pass
+        if cloud is not None:
+            print("[Info] Successfully read", path)
+            if not cloud.has_normals():
+                cloud.estimate_normals()
+            cloud.normalize_normals()
+            geometry = cloud
+            self._annotation_scene = AnnotationScene(geometry)
         else:
-            print("[Info]", path, "appears to be a point cloud")
+            print("[WARNING] Failed to read points", path)
 
-        if geometry is None:
-            cloud = None
-            try:
-                cloud = o3d.io.read_point_cloud(path)
-            except Exception:
-                pass
-            if cloud is not None:
-                print("[Info] Successfully read", path)
-                if not cloud.has_normals():
-                    cloud.estimate_normals()
-                cloud.normalize_normals()
-                geometry = cloud
-            else:
-                print("[WARNING] Failed to read points", path)
-
-        if geometry is not None:
-            try:
-                self._scene.scene.add_geometry("__model__", geometry,
-                                               self.settings.material)
-                bounds = geometry.get_axis_aligned_bounding_box()
-                self._scene.setup_camera(60, bounds, bounds.get_center())
-            except Exception as e:
-                print(e)
+        try:
+            self._scene.scene.add_geometry("__model__", geometry,
+                                           self.settings.material)
+            bounds = geometry.get_axis_aligned_bounding_box()
+            self._scene.setup_camera(60, bounds, bounds.get_center())
+        except Exception as e:
+            print(e)
 
     def export_image(self, path, width, height):
 
@@ -800,13 +808,13 @@ class AppWindow:
         # TODO handle overflow
         global  current_scene_no
         current_scene_no +=1
-        self.load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+        self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
 
     def _on_previous_scene(self):
         # TODO handle underflow
         global current_scene_no
         current_scene_no -=1
-        self.load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+        self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
 
     def save_annotation(self):
         pass
@@ -827,7 +835,7 @@ def main():
     objects_path = os.path.join(os.path.join(current, 'meshes', 'objects'))
     if os.path.exists(scenes_path) and os.path.exists(objects_path):
         path = os.path.join(scenes_path, f"{0:05}" + '.pcd')  # TODO: change it to load last annotated object from json
-        w.load(path)
+        w.scene_load(path)
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
