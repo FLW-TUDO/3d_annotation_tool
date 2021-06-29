@@ -21,10 +21,13 @@ class AnnotationScene:
         self.obj_list = list()
 
     def add_obj(self, obj_geometry, obj_name):
-        self.obj_list.insert(0, self.SceneObject(obj_geometry, obj_name))
+        self.obj_list.append(self.SceneObject(obj_geometry, obj_name))
 
     def get_objects(self):
         return self.obj_list[:]
+
+    def remove_obj(self, index):
+        self.obj_list.pop(index)
 
     class SceneObject:
         def __init__(self, obj_geometry, obj_name):
@@ -767,7 +770,10 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def _remove_mesh(self):
-        pass
+        self._annotation_scene.remove_obj(self._meshes_used.selected_index)
+        meshes = self._annotation_scene.get_objects() # update list after adding removing object
+        meshes = [i.obj_name for i in meshes]
+        self._meshes_used.set_items(meshes)
 
     def scene_load(self, path):
         self._scene.scene.clear_geometry()
