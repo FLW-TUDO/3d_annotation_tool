@@ -20,12 +20,16 @@ class AnnotationScene:
         self.bin_scene = bin_scene
         self.obj_list = list()
 
-    def add_obj(self, obj):
-        self.obj_list.insert(0, self.SceneObject(obj))
+    def add_obj(self, obj_geometry, obj_name):
+        self.obj_list.insert(0, self.SceneObject(obj_geometry, obj_name))
+
+    def get_objects(self):
+        return self.obj_list[:]
 
     class SceneObject:
-        def __init__(self, obj):
-            self._obj = obj
+        def __init__(self, obj_geometry, obj_name):
+            self._obj_geometry = obj_geometry
+            self.obj_name = obj_name
             self.translation = [0,0,0]
             self.orientation = [0,0,0]
 
@@ -748,12 +752,19 @@ class AppWindow:
         self.window.close_dialog()
 
     def _add_mesh(self):
+        meshes = self._annotation_scene.get_objects()
+        meshes = [i.obj_name for i in meshes]
+        def which_count():
+            types = [i[:-2] for i in meshes]
+            count = types.count(self._meshes_available.selected_value)
+            return str(count)
         object_geometry = o3d.io.read_point_cloud(objects_path + '/' + self._meshes_available.selected_value + '.pcd')
-        self._annotation_scene.add_obj(object_geometry)
-        new_mesh_name = str(self._meshes_available.selected_value) + '_' + str(self._meshes_available.selected_index)
+        new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
-        self._meshes_used.set_items([new_mesh_name]) # TODO add a handler to keep list of items and add set them all at once
-        #TODO check if there is a mesh of the same type then add _02 at the name end
+        self._annotation_scene.add_obj(object_geometry, new_mesh_name)
+        meshes = self._annotation_scene.get_objects() # update list after adding current object
+        meshes = [i.obj_name for i in meshes]
+        self._meshes_used.set_items(meshes)
 
     def _remove_mesh(self):
         pass
