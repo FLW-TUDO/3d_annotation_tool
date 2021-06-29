@@ -759,7 +759,13 @@ class AppWindow:
         meshes = [i.obj_name for i in meshes]
         def which_count():
             types = [i[:-2] for i in meshes]
-            count = types.count(self._meshes_available.selected_value)
+            equal_values = [i for i in range(len(types)) if types[i]==self._meshes_available.selected_value]
+            count = 0
+            if len(equal_values):
+                indices = np.array(meshes)
+                indices = indices[equal_values]
+                indices = [int(x[-1]) for x in indices]
+                count = max(indices) + 1
             return str(count)
         object_geometry = o3d.io.read_point_cloud(objects_path + '/' + self._meshes_available.selected_value + '.pcd')
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
@@ -770,6 +776,9 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def _remove_mesh(self):
+        if self._annotation_scene.get_objects:
+            print("There are no object to be deleted.")
+            return
         self._annotation_scene.remove_obj(self._meshes_used.selected_index)
         meshes = self._annotation_scene.get_objects() # update list after adding removing object
         meshes = [i.obj_name for i in meshes]
