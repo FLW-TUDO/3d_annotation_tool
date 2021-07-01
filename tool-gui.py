@@ -31,7 +31,7 @@ class AnnotationScene:
 
     class SceneObject:
         def __init__(self, obj_geometry, obj_name):
-            self._obj_geometry = obj_geometry
+            self.obj_geometry = obj_geometry
             self.obj_name = obj_name
             self.translation = [0,0,0]
             self.orientation = [0,0,0]
@@ -576,6 +576,24 @@ class AppWindow:
 
         self._annotation_scene = None
 
+        # set callbacks for key control
+        self._scene.set_on_key(self._transform)
+
+    def _transform(self, event):
+        # TODO handle when no objects are added or none is activated - warning on gui
+        if event.key == gui.KeyName.J:
+            print("? pressed: translate around ??")
+            objects = self._annotation_scene.get_objects()
+            active_obj = objects[self._meshes_used.selected_index]
+            center = active_obj.obj_geometry.get_center()
+            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((np.pi / 4, 0, 0))
+            active_obj.obj_geometry.rotate(rot_mat, center=center)
+            active_obj.obj_geometry.translate(np.array([1,0,0]))
+            center = active_obj.obj_geometry.get_center()
+            self._scene.scene.remove_geometry(active_obj.obj_name)
+            self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
+        return gui.Widget.EventCallbackResult.HANDLED
+
     def _set_mouse_mode_rotate(self):
         self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
 
@@ -832,12 +850,14 @@ class AppWindow:
 
     def _on_next_scene(self):
         # TODO handle overflow
+        # TODO reset meshes lists
         global  current_scene_no
         current_scene_no +=1
         self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
 
     def _on_previous_scene(self):
         # TODO handle underflow
+        # TODO reset meshes lists
         global current_scene_no
         current_scene_no -=1
         self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
