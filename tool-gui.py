@@ -33,8 +33,8 @@ class AnnotationScene:
         def __init__(self, obj_geometry, obj_name):
             self.obj_geometry = obj_geometry
             self.obj_name = obj_name
-            self.translation = [0,0,0]
-            self.orientation = [0,0,0]
+            self.translation = np.array([0,0,0], dtype=np.float64)
+            self.orientation = np.array([0,0,0], dtype=np.float64)
 
 class Settings:
     UNLIT = "defaultUnlit"
@@ -580,19 +580,66 @@ class AppWindow:
         self._scene.set_on_key(self._transform)
 
     def _transform(self, event):
-        # TODO handle when no objects are added or none is activated - warning on gui
-        if event.key == gui.KeyName.J:
-            print("? pressed: translate around ??")
+        if self._meshes_used.selected_index == -1:
+            self._on_empty_active_meshes()
+            return gui.Widget.EventCallbackResult.HANDLED
+
+        def move(x, y, z, rx, ry, rz):
             objects = self._annotation_scene.get_objects()
             active_obj = objects[self._meshes_used.selected_index]
             center = active_obj.obj_geometry.get_center()
-            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((np.pi / 4, 0, 0))
+            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((rx,ry,rz))
             active_obj.obj_geometry.rotate(rot_mat, center=center)
-            active_obj.obj_geometry.translate(np.array([1,0,0]))
+            active_obj.obj_geometry.translate(np.array([x,y,z]))
             center = active_obj.obj_geometry.get_center()
             self._scene.scene.remove_geometry(active_obj.obj_name)
             self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
+            # update values stored of object
+            active_obj.translation += np.array([x,y,z], dtype=np.float64)
+            active_obj.orientation += np.array([rx,ry,rz], dtype=np.float64)
+
+        if event.key == gui.KeyName.J:
+            print("j pressed: translate in +ve X direction")
+            move(0.05, 0, 0, 0, 0, 0)
+        elif event.key == gui.KeyName.K:
+            print("k pressed: translate in +ve X direction")
+            move(-0.05, 0, 0, 0, 0, 0)
+        elif event.key == gui.KeyName.H:
+            print("j pressed: translate in +ve Y direction")
+            move(0, 0.05, 0, 0, 0, 0)
+        elif event.key == gui.KeyName.L:
+            print("j pressed: translate in -ve Y direction")
+            move(0, -0.05, 0, 0, 0, 0)
+        elif event.key == gui.KeyName.I:
+            print("j pressed: translate in +ve Z direction")
+            move(0, 0, 0.05, 0, 0, 0)
+        elif event.key == gui.KeyName.COMMA:
+            print("j pressed: translate in -ve Z direction")
+            move(0, 0, -0.05, 0, 0, 0)
+
         return gui.Widget.EventCallbackResult.HANDLED
+
+    def _on_empty_active_meshes(self):
+        dlg = gui.Dialog("Error")
+
+        em = self.window.theme.font_size
+        dlg_layout = gui.Vert(em, gui.Margins(em, em, em, em))
+        dlg_layout.add_child(gui.Label("No objects are highlighted in scene meshes"))
+
+        ok = gui.Button("OK")
+        ok.set_on_clicked(self._on_about_ok)
+
+        h = gui.Horiz()
+        h.add_stretch()
+        h.add_child(ok)
+        h.add_stretch()
+        dlg_layout.add_child(h)
+
+        dlg.add_child(dlg_layout)
+        self.window.show_dialog(dlg)
+
+    def _on_empty_active_meshes_ok(self):
+        self.window.close_dialog()
 
     def _set_mouse_mode_rotate(self):
         self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
