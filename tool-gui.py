@@ -580,6 +580,7 @@ class AppWindow:
         self._scene.set_on_key(self._transform)
 
     def _transform(self, event):
+        # TODO handle 1 click being 2 clicks
         if self._meshes_used.selected_index == -1:
             self._on_empty_active_meshes()
             return gui.Widget.EventCallbackResult.HANDLED
@@ -600,22 +601,22 @@ class AppWindow:
 
         if event.key == gui.KeyName.J:
             print("j pressed: translate in +ve X direction")
-            move(0.05, 0, 0, 0, 0, 0)
+            move(0.005, 0, 0, 0, 0, 0)
         elif event.key == gui.KeyName.K:
             print("k pressed: translate in +ve X direction")
-            move(-0.05, 0, 0, 0, 0, 0)
+            move(-0.005, 0, 0, 0, 0, 0)
         elif event.key == gui.KeyName.H:
-            print("j pressed: translate in +ve Y direction")
-            move(0, 0.05, 0, 0, 0, 0)
+            print("h pressed: translate in +ve Y direction")
+            move(0, 0.005, 0, 0, 0, 0)
         elif event.key == gui.KeyName.L:
-            print("j pressed: translate in -ve Y direction")
-            move(0, -0.05, 0, 0, 0, 0)
+            print("l pressed: translate in -ve Y direction")
+            move(0, -0.005, 0, 0, 0, 0)
         elif event.key == gui.KeyName.I:
-            print("j pressed: translate in +ve Z direction")
-            move(0, 0, 0.05, 0, 0, 0)
+            print("i pressed: translate in +ve Z direction")
+            move(0, 0, 0.005, 0, 0, 0)
         elif event.key == gui.KeyName.COMMA:
-            print("j pressed: translate in -ve Z direction")
-            move(0, 0, -0.05, 0, 0, 0)
+            print(", pressed: translate in -ve Z direction")
+            move(0, 0, -0.005, 0, 0, 0)
 
         return gui.Widget.EventCallbackResult.HANDLED
 
@@ -874,6 +875,11 @@ class AppWindow:
                                            self.settings.material)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
+            center = bounds.get_center()
+            eye = center + np.array([-0.5,0,1])
+            up = np.array([0,0,1])
+            self._scene.look_at(center, eye, up)
+
         except Exception as e:
             print(e)
 
