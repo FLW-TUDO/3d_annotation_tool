@@ -11,10 +11,14 @@ import pathlib
 
 isMacOS = (platform.system() == "Darwin")
 
-scenes_path = ''
-objects_path = ''
-
 left_shift_modifier = False
+
+
+class Scenes:
+    def __init__(self, dataset_path):
+        self.scenes_path = os.path.join(dataset_path, 'scenes')
+        self.objects_path = os.path.join(dataset_path, 'objects')
+
 
 class AnnotationScene:
     def __init__(self, scene_num, bin_scene):
@@ -281,8 +285,8 @@ class AppWindow:
         self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width,
                                               height)
 
-    def __init__(self, width, height):
-        global scenes_path, objects_path
+    def __init__(self, width, height, scenes):
+        self.scenes = scenes
         self.settings = Settings()
         resource_path = gui.Application.instance.resource_path
         self.settings.new_ibl_name = resource_path + "/" + AppWindow.DEFAULT_IBL
@@ -591,8 +595,6 @@ class AppWindow:
                 left_shift_modifier = False
             return gui.Widget.EventCallbackResult.HANDLED
 
-        # TODO handle 1 click being 2 clicks
-
         # if no active_mesh selected print error
         if self._meshes_used.selected_index == -1:
             self._on_empty_active_meshes()
@@ -871,7 +873,7 @@ class AppWindow:
                 indices = [int(x[-1]) for x in indices]
                 count = max(indices) + 1
             return str(count)
-        object_geometry = o3d.io.read_point_cloud(objects_path + '/' + self._meshes_available.selected_value + '.pcd')
+        object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name)
@@ -889,7 +891,6 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def scene_load(self, scenes_path, scene_num):
-        # TODO: change it to load last annotated object from json
         cloud_path = os.path.join(scenes_path, f"{scene_num:05}", 'assembled_cloud.pcd')
 
         self._scene.scene.clear_geometry()
@@ -937,20 +938,19 @@ class AppWindow:
         self._scene.scene.scene.render_to_image(on_image)
 
     def update_obj_list(self):
-        global objects_path
-        objects_list = os.listdir(objects_path)
+        objects_list = os.listdir(self.scenes.objects_path)
         objects_list = [x.split('.')[0] for x in objects_list]
         self._meshes_available.set_items(objects_list)
 
     def _on_next_scene(self):
         # TODO handle overflow
-        # TODO reset meshes lists
-        self.scene_load(scenes_path, self._annotation_scene.scene_num+1)
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num+1)
+        self._meshes_used.set_items([])
 
     def _on_previous_scene(self):
         # TODO handle underflow
-        # TODO reset meshes lists
-        self.scene_load(scenes_path, self._annotation_scene.scene_num-1)
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num-1)
+        self._meshes_used.set_items([])
 
     def save_annotation(self):
         pass
@@ -961,20 +961,18 @@ def main():
     # for rendering and prepares the cross-platform window abstraction.
     gui.Application.instance.initialize()
 
-    w = AppWindow(2048, 1536)
+    dataset_path = os.path.join(pathlib.Path().absolute(), 'dataset') # TODO make a gui window that asks for dataset path
+    scenes = Scenes(dataset_path)
 
-    global scenes_path, objects_path
+    w = AppWindow(2048, 1536, scenes)
 
-    current = pathlib.Path().absolute()
-    start_scene_num = 0
-    scenes_path = os.path.join(os.path.join(current, 'dataset', 'scenes'))
-    objects_path = os.path.join(os.path.join(current, 'dataset', 'objects'))
-    if os.path.exists(scenes_path) and os.path.exists(objects_path):
-        w.scene_load(scenes_path, start_scene_num)
+    start_scene_num = 0 # TODO: change it to load last annotated object from json
+    if os.path.exists(scenes.scenes_path) and os.path.exists(scenes.objects_path):
+        w.scene_load(scenes.scenes_path, start_scene_num)
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
-                                  "Could not scenes or object meshes folders " + scenes_path + "/" + objects_path)
+                                  "Could not scenes or object meshes folders " + scenes.scenes_path + "/" + scenes.objects_path)
         exit()
 
     # Run the event loop. This will not return until the last window is closed.
