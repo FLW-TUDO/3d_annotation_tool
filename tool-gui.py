@@ -11,15 +11,16 @@ import pathlib
 
 isMacOS = (platform.system() == "Darwin")
 
-current_scene_no = 0
 scenes_path = ''
 objects_path = ''
 
 left_shift_modifier = False
 
 class AnnotationScene:
-    def __init__(self, bin_scene):
+    def __init__(self, scene_num, bin_scene):
         self.bin_scene = bin_scene
+        self.scene_num = scene_num
+
         self.obj_list = list()
 
     def add_obj(self, obj_geometry, obj_name):
@@ -281,7 +282,7 @@ class AppWindow:
                                               height)
 
     def __init__(self, width, height):
-        global current_scene_no, scenes_path, objects_path
+        global scenes_path, objects_path
         self.settings = Settings()
         resource_path = gui.Application.instance.resource_path
         self.settings.new_ibl_name = resource_path + "/" + AppWindow.DEFAULT_IBL
@@ -887,32 +888,35 @@ class AppWindow:
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
 
-    def scene_load(self, path):
+    def scene_load(self, scenes_path, scene_num):
+        # TODO: change it to load last annotated object from json
+        cloud_path = os.path.join(scenes_path, f"{scene_num:05}", 'assembled_cloud.pcd')
+
         self._scene.scene.clear_geometry()
 
         geometry = None
         cloud = None
 
         try:
-            cloud = o3d.io.read_point_cloud(path)
+            cloud = o3d.io.read_point_cloud(cloud_path)
         except Exception:
             pass
         if cloud is not None:
-            print("[Info] Successfully read", path)
+            print("[Info] Successfully read", cloud_path)
             if not cloud.has_normals():
                 cloud.estimate_normals()
             cloud.normalize_normals()
             geometry = cloud
-            self._annotation_scene = AnnotationScene(geometry)
+            self._annotation_scene = AnnotationScene(scene_num, geometry)
         else:
-            print("[WARNING] Failed to read points", path)
+            print("[WARNING] Failed to read points", cloud_path)
 
         try:
             self._scene.scene.add_geometry("__model__", geometry,
                                            self.settings.material)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
-            center = bounds.get_center()
+            center = bounds.get_center() # TODO this should be changed to origin assuming all cloud will be centered around bin center
             eye = center + np.array([-0.5,0,1])
             up = np.array([0,0,1])
             self._scene.look_at(center, eye, up)
@@ -941,16 +945,12 @@ class AppWindow:
     def _on_next_scene(self):
         # TODO handle overflow
         # TODO reset meshes lists
-        global  current_scene_no
-        current_scene_no +=1
-        self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+        self.scene_load(scenes_path, self._annotation_scene.scene_num+1)
 
     def _on_previous_scene(self):
         # TODO handle underflow
         # TODO reset meshes lists
-        global current_scene_no
-        current_scene_no -=1
-        self.scene_load(os.path.join(scenes_path, f"{current_scene_no:05}") + '.pcd')
+        self.scene_load(scenes_path, self._annotation_scene.scene_num-1)
 
     def save_annotation(self):
         pass
@@ -963,15 +963,14 @@ def main():
 
     w = AppWindow(2048, 1536)
 
-    global scenes_path, objects_path, current_scene_no
+    global scenes_path, objects_path
 
     current = pathlib.Path().absolute()
-    current_scene_no = 0
-    scenes_path = os.path.join(os.path.join(current, 'meshes', 'scenes'))
-    objects_path = os.path.join(os.path.join(current, 'meshes', 'objects'))
+    start_scene_num = 0
+    scenes_path = os.path.join(os.path.join(current, 'dataset', 'scenes'))
+    objects_path = os.path.join(os.path.join(current, 'dataset', 'objects'))
     if os.path.exists(scenes_path) and os.path.exists(objects_path):
-        path = os.path.join(scenes_path, f"{0:05}" + '.pcd')  # TODO: change it to load last annotated object from json
-        w.scene_load(path)
+        w.scene_load(scenes_path, start_scene_num)
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
