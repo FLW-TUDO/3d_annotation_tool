@@ -882,7 +882,7 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def _remove_mesh(self):
-        if self._annotation_scene.get_objects:
+        if not self._annotation_scene.get_objects():
             print("There are no object to be deleted.")
             return
         self._annotation_scene.remove_obj(self._meshes_used.selected_index)
