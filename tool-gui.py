@@ -6,8 +6,8 @@ import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 import os
 import platform
-import sys
 import pathlib
+import json
 
 isMacOS = (platform.system() == "Darwin")
 
@@ -21,6 +21,7 @@ class Scenes:
 
 
 class AnnotationScene:
+    # TODO add functions to add and remove objects that also handle the scene insertion and deletion
     def __init__(self, scene_num, bin_scene):
         self.bin_scene = bin_scene
         self.scene_num = scene_num
@@ -521,7 +522,8 @@ class AppWindow:
         next_button = gui.Button("Next")
         pre_button.set_on_clicked(self._on_previous_scene)
         next_button.set_on_clicked(self._on_next_scene)
-        generate_save_annotation = gui.Button("generate - save/update")
+        generate_save_annotation = gui.Button("generate annotation - save/update")
+        generate_save_annotation.set_on_clicked(self._on_generate)
         scene_control.add_child(generate_save_annotation)
         scene_control.add_child(pre_button)
         scene_control.add_child(next_button)
@@ -659,6 +661,23 @@ class AppWindow:
                     move(0, 0, 0, 0, 0, -deg*np.pi/180)
 
         return gui.Widget.EventCallbackResult.HANDLED
+
+    def _on_generate(self):
+        json_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", "6d.json")
+        with open(json_path, 'w') as f:
+            data = list()
+            for obj in self._annotation_scene.get_objects():
+                obj_data = {"type": str(obj.obj_name[:-2]),
+                        "instance" : str(obj.obj_name[-1]),
+                        "x": str(obj.translation[0]),
+                        "y": str(obj.translation[1]),
+                        "z": str(obj.translation[2]),
+                        "rx": str(obj.orientation[0]),
+                        "ry": str(obj.orientation[1]),
+                        "rz": str(obj.orientation[2])
+                        }
+                data.append(obj_data)
+            json.dump(data, f)
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
@@ -863,6 +882,7 @@ class AppWindow:
     def _add_mesh(self):
         meshes = self._annotation_scene.get_objects()
         meshes = [i.obj_name for i in meshes]
+
         def which_count():
             types = [i[:-2] for i in meshes]
             equal_values = [i for i in range(len(types)) if types[i]==self._meshes_available.selected_value]
