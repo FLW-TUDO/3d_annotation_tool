@@ -28,8 +28,8 @@ class AnnotationScene:
 
         self.obj_list = list()
 
-    def add_obj(self, obj_geometry, obj_name):
-        self.obj_list.append(self.SceneObject(obj_geometry, obj_name))
+    def add_obj(self, obj_geometry, obj_name, translation=np.array([0, 0, 0], dtype=np.float64), orientation=np.array([0, 0, 0], dtype=np.float64)):
+        self.obj_list.append(self.SceneObject(obj_geometry, obj_name, translation, orientation))
 
     def get_objects(self):
         return self.obj_list[:]
@@ -38,11 +38,11 @@ class AnnotationScene:
         self.obj_list.pop(index)
 
     class SceneObject:
-        def __init__(self, obj_geometry, obj_name):
+        def __init__(self, obj_geometry, obj_name, translation, orientation):
             self.obj_geometry = obj_geometry
             self.obj_name = obj_name
-            self.translation = np.array([0,0,0], dtype=np.float64)
-            self.orientation = np.array([0,0,0], dtype=np.float64)
+            self.translation = translation
+            self.orientation = orientation
 
 class Settings:
     UNLIT = "defaultUnlit"
@@ -892,6 +892,7 @@ class AppWindow:
                 indices = indices[equal_values]
                 indices = [int(x[-1]) for x in indices]
                 count = max(indices) + 1
+                # TODO change to fill the numbers missing in sequence
             return str(count)
         object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
@@ -900,6 +901,7 @@ class AppWindow:
         meshes = self._annotation_scene.get_objects() # update list after adding current object
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
+        # TODO make this added mesh the highlighted one
 
     def _remove_mesh(self):
         if not self._annotation_scene.get_objects():
@@ -932,7 +934,6 @@ class AppWindow:
                 cloud.estimate_normals()
             cloud.normalize_normals()
             geometry = cloud
-            self._annotation_scene = AnnotationScene(scene_num, geometry)
         else:
             print("[WARNING] Failed to read points", cloud_path)
 
@@ -945,6 +946,29 @@ class AppWindow:
             eye = center + np.array([-0.5,0,1])
             up = np.array([0,0,1])
             self._scene.look_at(center, eye, up)
+
+            self._annotation_scene = AnnotationScene(scene_num, geometry)
+            self._meshes_used.set_items([]) # clear list from last loaded scene
+
+            # load values if an annotation already exists
+            json_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", '6d.json')
+            #if os.path.exists(json_path):
+            with open(json_path) as json_file:
+                data = json.load(json_file)
+                obj_list = list()
+                for obj in data:
+                    # add object to annotation_scene object
+                    obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, obj['type'] + '.pcd'))
+                    obj_name = obj['type'] + '_' + obj['instance']
+                    translation = np.array([float(obj['x']), float(obj['y']), float(obj['z'])], dtype=np.float64)
+                    orientation = np.array([float(obj['rx']), float(obj['ry']), float(obj['rz'])], dtype=np.float64)
+                    self._annotation_scene.add_obj(obj_geometry, obj_name, translation, orientation)
+                    # adding object to the scene
+                    rot_mat = obj_geometry.get_rotation_matrix_from_xyz(tuple(orientation))
+                    obj_geometry.rotate(rot_mat, center=center)
+                    obj_geometry.translate(translation)
+                    center = obj_geometry.get_center()
+                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
 
         except Exception as e:
             print(e)
@@ -969,12 +993,10 @@ class AppWindow:
     def _on_next_scene(self):
         # TODO handle overflow
         self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num+1)
-        self._meshes_used.set_items([])
 
     def _on_previous_scene(self):
         # TODO handle underflow
         self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num-1)
-        self._meshes_used.set_items([])
 
     def save_annotation(self):
         pass
