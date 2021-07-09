@@ -885,8 +885,12 @@ class AppWindow:
         if not self._annotation_scene.get_objects():
             print("There are no object to be deleted.")
             return
-        self._annotation_scene.remove_obj(self._meshes_used.selected_index)
-        meshes = self._annotation_scene.get_objects() # update list after adding removing object
+        meshes = self._annotation_scene.get_objects()
+        active_obj = meshes[self._meshes_used.selected_index]
+        self._scene.scene.remove_geometry(active_obj.obj_name)  # remove mesh from scene
+        self._annotation_scene.remove_obj(self._meshes_used.selected_index)  # remove mesh from class list
+        # update list after adding removing object
+        meshes = self._annotation_scene.get_objects()  # get new list after deletion
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
 
