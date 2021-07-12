@@ -666,9 +666,10 @@ class AppWindow:
         return gui.Widget.EventCallbackResult.HANDLED
 
     def _on_generate(self):
-        json_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", "6d.json")
-        with open(json_path, 'w') as f:
-            data = list()
+        # write 6D annotation for each object
+        json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", "6d.json")
+        with open(json_6d_path, 'w') as f:
+            pose_data = list()
             for obj in self._annotation_scene.get_objects():
                 obj_data = {"type": str(obj.obj_name[:-2]),
                             "instance": str(obj.obj_name[-1]),
@@ -679,8 +680,32 @@ class AppWindow:
                             "ry": str(obj.orientation[1]),
                             "rz": str(obj.orientation[2])
                             }
-                data.append(obj_data)
-            json.dump(data, f)
+                pose_data.append(obj_data)
+            json.dump(pose_data, f)
+
+        # write cloud segmentation annotation - set of points for each object instance
+        json_cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",
+                                                  'cloud_annotation.json')
+        with open(json_cloud_annotation_path, 'w') as f:
+            cloud_annotation_data = list()
+            for scene_obj in self._annotation_scene.get_objects():
+                # find nearest points for each object and save mask
+                obj = scene_obj.obj_geometry
+                scene = self._annotation_scene.bin_scene
+                pcd_tree = o3d.geometry.KDTreeFlann(scene)
+                seg_points = np.empty(len(scene.points), dtype=bool)
+                for point in obj.points:
+                    [k, idx, _] = pcd_tree.search_radius_vector_3d(point, 0.005)
+                    np.asarray(scene.colors)[idx[1:], :] = [0, 1, 0]  # Debug
+                    seg_points[idx] = True
+                o3d.visualization.draw_geometries([scene])  # Debug
+                seg_idx = np.where(seg_points == True)[0]
+                obj_data = {"type": str(scene_obj.obj_name[:-2]),
+                            "instance": str(scene_obj.obj_name[-1]),
+                            "point_indices": list(map(str, seg_idx))
+                            }
+                cloud_annotation_data.append(obj_data)
+            json.dump(cloud_annotation_data, f)
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
