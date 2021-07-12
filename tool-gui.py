@@ -28,7 +28,8 @@ class AnnotationScene:
 
         self.obj_list = list()
 
-    def add_obj(self, obj_geometry, obj_name, translation=np.array([0, 0, 0], dtype=np.float64), orientation=np.array([0, 0, 0], dtype=np.float64)):
+    def add_obj(self, obj_geometry, obj_name, translation=np.array([0, 0, 0], dtype=np.float64),
+                orientation=np.array([0, 0, 0], dtype=np.float64)):
         self.obj_list.append(self.SceneObject(obj_geometry, obj_name, translation, orientation))
 
     def get_objects(self):
@@ -43,6 +44,7 @@ class AnnotationScene:
             self.obj_name = obj_name
             self.translation = translation
             self.orientation = orientation
+
 
 class Settings:
     UNLIT = "defaultUnlit"
@@ -264,7 +266,7 @@ class AppWindow:
         self._sun_dir.vector_value = self.settings.sun_dir
         self._sun_color.color_value = self.settings.sun_color
         self._material_prefab.enabled = (
-            self.settings.material.shader == Settings.LIT)
+                self.settings.material.shader == Settings.LIT)
         c = gui.Color(self.settings.material.base_color[0],
                       self.settings.material.base_color[1],
                       self.settings.material.base_color[2],
@@ -415,7 +417,6 @@ class AppWindow:
         self._ibl_map = gui.Combobox()
         for ibl in glob.glob(gui.Application.instance.resource_path +
                              "/*_ibl.ktx"):
-
             self._ibl_map.add_item(os.path.basename(ibl[:-8]))
         self._ibl_map.selected_text = AppWindow.DEFAULT_IBL
         self._ibl_map.set_on_selection_changed(self._on_new_ibl)
@@ -501,11 +502,11 @@ class AppWindow:
 
         # 3D Annotation tool options
         annotation_objects = gui.CollapsableVert("Annotation Objects", 0.33 * em,
-                                                gui.Margins(em, 0, 0, 0))
+                                                 gui.Margins(em, 0, 0, 0))
         self._meshes_available = gui.ListView()
-        #mesh_available.set_items(["bottle", "can"])
+        # mesh_available.set_items(["bottle", "can"])
         self._meshes_used = gui.ListView()
-        #mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
+        # mesh_used.set_items(["can_0", "can_1", "can_1", "can_1"])
         add_mesh_button = gui.Button("Add Mesh")
         remove_mesh_button = gui.Button("Remove Mesh")
         add_mesh_button.set_on_clicked(self._add_mesh)
@@ -517,7 +518,7 @@ class AppWindow:
         self._settings_panel.add_child(annotation_objects)
 
         scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
-                                                 gui.Margins(em, 0, 0, 0))
+                                            gui.Margins(em, 0, 0, 0))
         pre_button = gui.Button("Previous")
         next_button = gui.Button("Next")
         pre_button.set_on_clicked(self._on_previous_scene)
@@ -529,7 +530,6 @@ class AppWindow:
         scene_control.add_child(next_button)
         self._settings_panel.add_child(scene_control)
 
-
         # ---- Menu ----
         # The menu is global (because the macOS menu is global), so only create
         # it once, no matter how many windows are created
@@ -540,7 +540,7 @@ class AppWindow:
                 app_menu.add_separator()
                 app_menu.add_item("Quit", AppWindow.MENU_QUIT)
             file_menu = gui.Menu()
-            #file_menu.add_item("Open Annotation Folder", AppWindow.MENU_OPEN)
+            # file_menu.add_item("Open Annotation Folder", AppWindow.MENU_OPEN)
             file_menu.add_item("Export Current Image...", AppWindow.MENU_EXPORT)
             if not isMacOS:
                 file_menu.add_separator()
@@ -572,7 +572,7 @@ class AppWindow:
         # The menubar is global, but we need to connect the menu items to the
         # window, so that the window can call the appropriate function when the
         # menu item is activated.
-        #w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
+        # w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
         w.set_on_menu_item_activated(AppWindow.MENU_EXPORT,
                                      self._on_menu_export)
         w.set_on_menu_item_activated(AppWindow.MENU_QUIT, self._on_menu_quit)
@@ -606,17 +606,17 @@ class AppWindow:
             objects = self._annotation_scene.get_objects()
             active_obj = objects[self._meshes_used.selected_index]
             center = active_obj.obj_geometry.get_center()
-            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((rx,ry,rz))
+            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((rx, ry, rz))
             active_obj.obj_geometry.rotate(rot_mat, center=center)
-            active_obj.obj_geometry.translate(np.array([x,y,z]))
+            active_obj.obj_geometry.translate(np.array([x, y, z]))
             center = active_obj.obj_geometry.get_center()
             self._scene.scene.remove_geometry(active_obj.obj_name)
             self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
             # update values stored of object
-            active_obj.translation += np.array([x,y,z], dtype=np.float64)
-            active_obj.orientation += np.array([rx,ry,rz], dtype=np.float64)
+            active_obj.translation += np.array([x, y, z], dtype=np.float64)
+            active_obj.orientation += np.array([rx, ry, rz], dtype=np.float64)
 
-        if event.type == gui.KeyEvent.DOWN: # only move objects with down strokes
+        if event.type == gui.KeyEvent.DOWN:  # only move objects with down strokes
             # Translation
             if not left_shift_modifier:
                 if event.key == gui.KeyName.J:
@@ -640,25 +640,25 @@ class AppWindow:
             # Rotation - keystrokes are not in same order as translation to make movement more human intuitive
             else:
                 print("Left-Shift is clicked; rotation mode")
-                deg = 3 # degree
+                deg = 3  # degree
                 if event.key == gui.KeyName.L:
                     print("j pressed: rotate around +ve X direction")
-                    move(0, 0, 0, deg*np.pi/180, 0, 0)
+                    move(0, 0, 0, deg * np.pi / 180, 0, 0)
                 elif event.key == gui.KeyName.H:
                     print("k pressed: rotate around +ve X direction")
-                    move(0, 0, 0, -deg*np.pi/180, 0, 0)
+                    move(0, 0, 0, -deg * np.pi / 180, 0, 0)
                 elif event.key == gui.KeyName.I:
                     print("h pressed: rotate around +ve Y direction")
-                    move(0, 0, 0, 0, deg*np.pi/180, 0)
+                    move(0, 0, 0, 0, deg * np.pi / 180, 0)
                 elif event.key == gui.KeyName.COMMA:
                     print("l pressed: rotate around -ve Y direction")
-                    move(0, 0, 0, 0, -deg*np.pi/180, 0)
+                    move(0, 0, 0, 0, -deg * np.pi / 180, 0)
                 elif event.key == gui.KeyName.J:
                     print("i pressed: rotate around +ve Z direction")
-                    move(0, 0, 0, 0, 0, deg*np.pi/180)
+                    move(0, 0, 0, 0, 0, deg * np.pi / 180)
                 elif event.key == gui.KeyName.K:
                     print(", pressed: rotate around -ve Z direction")
-                    move(0, 0, 0, 0, 0, -deg*np.pi/180)
+                    move(0, 0, 0, 0, 0, -deg * np.pi / 180)
 
         return gui.Widget.EventCallbackResult.HANDLED
 
@@ -668,14 +668,14 @@ class AppWindow:
             data = list()
             for obj in self._annotation_scene.get_objects():
                 obj_data = {"type": str(obj.obj_name[:-2]),
-                        "instance" : str(obj.obj_name[-1]),
-                        "x": str(obj.translation[0]),
-                        "y": str(obj.translation[1]),
-                        "z": str(obj.translation[2]),
-                        "rx": str(obj.orientation[0]),
-                        "ry": str(obj.orientation[1]),
-                        "rz": str(obj.orientation[2])
-                        }
+                            "instance": str(obj.obj_name[-1]),
+                            "x": str(obj.translation[0]),
+                            "y": str(obj.translation[1]),
+                            "z": str(obj.translation[2]),
+                            "rx": str(obj.orientation[0]),
+                            "ry": str(obj.orientation[1]),
+                            "rz": str(obj.orientation[2])
+                            }
                 data.append(obj_data)
             json.dump(data, f)
 
@@ -788,7 +788,7 @@ class AppWindow:
         self.settings.apply_material = True
         self._apply_settings()
 
-    #def _on_menu_open(self):
+    # def _on_menu_open(self):
     #    dlg = gui.FileDialog(gui.FileDialog.OPEN, "Choose file to load",
     #                         self.window.theme)
     #    dlg.add_filter(
@@ -885,7 +885,7 @@ class AppWindow:
 
         def which_count():
             types = [i[:-2] for i in meshes]
-            equal_values = [i for i in range(len(types)) if types[i]==self._meshes_available.selected_value]
+            equal_values = [i for i in range(len(types)) if types[i] == self._meshes_available.selected_value]
             count = 0
             if len(equal_values):
                 indices = np.array(meshes)
@@ -894,11 +894,13 @@ class AppWindow:
                 count = max(indices) + 1
                 # TODO change to fill the numbers missing in sequence
             return str(count)
-        object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
+
+        object_geometry = o3d.io.read_point_cloud(
+            self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name)
-        meshes = self._annotation_scene.get_objects() # update list after adding current object
+        meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
         # TODO make this added mesh the highlighted one
@@ -917,6 +919,8 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def scene_load(self, scenes_path, scene_num):
+        # TODO fix: when previous annotation loaded they differ than the last saved values
+        # TODO fix: list of active_meshes doens't load when loading previous annotations
         cloud_path = os.path.join(scenes_path, f"{scene_num:05}", 'assembled_cloud.pcd')
 
         self._scene.scene.clear_geometry()
@@ -942,17 +946,17 @@ class AppWindow:
                                            self.settings.material)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
-            center = bounds.get_center() # TODO this should be changed to origin assuming all cloud will be centered around bin center
-            eye = center + np.array([-0.5,0,1])
-            up = np.array([0,0,1])
+            center = bounds.get_center()  # TODO this should be changed to origin assuming all cloud will be centered around bin center
+            eye = center + np.array([-0.5, 0, 1])
+            up = np.array([0, 0, 1])
             self._scene.look_at(center, eye, up)
 
             self._annotation_scene = AnnotationScene(scene_num, geometry)
-            self._meshes_used.set_items([]) # clear list from last loaded scene
+            self._meshes_used.set_items([])  # clear list from last loaded scene
 
             # load values if an annotation already exists
             json_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", '6d.json')
-            #if os.path.exists(json_path):
+            # if os.path.exists(json_path):
             with open(json_path) as json_file:
                 data = json.load(json_file)
                 obj_list = list()
@@ -992,11 +996,11 @@ class AppWindow:
 
     def _on_next_scene(self):
         # TODO handle overflow
-        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num+1)
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num + 1)
 
     def _on_previous_scene(self):
         # TODO handle underflow
-        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num-1)
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num - 1)
 
     def save_annotation(self):
         pass
@@ -1007,12 +1011,13 @@ def main():
     # for rendering and prepares the cross-platform window abstraction.
     gui.Application.instance.initialize()
 
-    dataset_path = os.path.join(pathlib.Path().absolute(), 'dataset') # TODO make a gui window that asks for dataset path
+    dataset_path = os.path.join(pathlib.Path().absolute(),
+                                'dataset')  # TODO make a gui window that asks for dataset path
     scenes = Scenes(dataset_path)
 
     w = AppWindow(2048, 1536, scenes)
 
-    start_scene_num = 0 # TODO: change it to load last annotated object from json
+    start_scene_num = 0  # TODO: change it to load last annotated object from json
     if os.path.exists(scenes.scenes_path) and os.path.exists(scenes.objects_path):
         w.scene_load(scenes.scenes_path, start_scene_num)
         w.update_obj_list()
