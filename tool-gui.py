@@ -589,6 +589,9 @@ class AppWindow:
         self._scene.set_on_key(self._transform)
 
     def _transform(self, event):
+        if event.is_repeat:
+            return gui.Widget.EventCallbackResult.HANDLED
+
         global left_shift_modifier
         if event.key == gui.KeyName.LEFT_SHIFT:
             if event.type == gui.KeyEvent.DOWN:
@@ -645,7 +648,7 @@ class AppWindow:
                     print("j pressed: rotate around +ve X direction")
                     move(0, 0, 0, deg * np.pi / 180, 0, 0)
                 elif event.key == gui.KeyName.H:
-                    print("k pressed: rotate around +ve X direction")
+                    print("k pressed: rotate around -ve X direction")
                     move(0, 0, 0, -deg * np.pi / 180, 0, 0)
                 elif event.key == gui.KeyName.I:
                     print("h pressed: rotate around +ve Y direction")
@@ -919,8 +922,7 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def scene_load(self, scenes_path, scene_num):
-        # TODO fix: when previous annotation loaded they differ than the last saved values
-        # TODO fix: list of active_meshes doens't load when loading previous annotations
+        # TODO fix: adding new shape after loading previous annotation may have a bug
         cloud_path = os.path.join(scenes_path, f"{scene_num:05}", 'assembled_cloud.pcd')
 
         self._scene.scene.clear_geometry()
@@ -960,6 +962,7 @@ class AppWindow:
             with open(json_path) as json_file:
                 data = json.load(json_file)
                 obj_list = list()
+                active_meshes = list()
                 for obj in data:
                     # add object to annotation_scene object
                     obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, obj['type'] + '.pcd'))
@@ -973,6 +976,9 @@ class AppWindow:
                     obj_geometry.translate(translation)
                     center = obj_geometry.get_center()
                     self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
+
+                    active_meshes.append(obj_name)
+            self._meshes_used.set_items(active_meshes)
 
         except Exception as e:
             print(e)
