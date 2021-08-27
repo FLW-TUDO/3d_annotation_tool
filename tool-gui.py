@@ -8,6 +8,8 @@ import os
 import platform
 import pathlib
 import json
+import cv2
+from tf.transformations import quaternion_matrix
 
 isMacOS = (platform.system() == "Darwin")
 
@@ -581,6 +583,8 @@ class AppWindow:
         w.set_on_menu_item_activated(AppWindow.MENU_ABOUT, self._on_menu_about)
         # ----
 
+        self._on_point_size(1) # set default size to 1
+
         self._apply_settings()
 
         self._annotation_scene = None
@@ -589,6 +593,7 @@ class AppWindow:
         self._scene.set_on_key(self._transform)
 
     def _transform(self, event):
+        # TODO pressing the keys too fast still causes problems, is that render process that slow
         if event.is_repeat:
             return gui.Widget.EventCallbackResult.HANDLED
 
@@ -686,19 +691,19 @@ class AppWindow:
         # write cloud segmentation annotation - set of points for each object instance
         json_cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",
                                                   'cloud_annotation.json')
+        cloud_annotation_data = list()
         with open(json_cloud_annotation_path, 'w') as f:
-            cloud_annotation_data = list()
             for scene_obj in self._annotation_scene.get_objects():
                 # find nearest points for each object and save mask
                 obj = scene_obj.obj_geometry
                 scene = self._annotation_scene.bin_scene
                 pcd_tree = o3d.geometry.KDTreeFlann(scene)
-                seg_points = np.empty(len(scene.points), dtype=bool)
+                seg_points = np.zeros(len(scene.points), dtype=bool)
                 for point in obj.points:
                     [k, idx, _] = pcd_tree.search_radius_vector_3d(point, 0.005)
                     np.asarray(scene.colors)[idx[1:], :] = [0, 1, 0]  # Debug
-                    seg_points[idx] = True
-                o3d.visualization.draw_geometries([scene])  # Debug
+                    seg_points[idx[1:]] = True
+                #o3d.visualization.draw_geometries([scene])  # Debug
                 seg_idx = np.where(seg_points == True)[0]
                 obj_data = {"type": str(scene_obj.obj_name[:-2]),
                             "instance": str(scene_obj.obj_name[-1]),
@@ -706,6 +711,56 @@ class AppWindow:
                             }
                 cloud_annotation_data.append(obj_data)
             json.dump(cloud_annotation_data, f)
+
+            # generate segmented image then save mask in Detectron 2 format
+            depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])
+            seg_mask = np.zeros((1200, 1944))
+
+            #tvec = np.array([0, 0, 0], np.float)
+            tvec = np.array([0.004, 0.029, 1.058], np.float)
+
+            #rvec = np.array([0, 0, 0], np.float)
+            #rvec = np.array([0, 0, 0, 1], np.float)
+            rvec = np.array([-0.689, 0.706, -0.132, -0.095], np.float)
+
+            #matrix = o3d.geometry.get_rotation_matrix_from_xyz(tuple(rvec))
+            matrix = quaternion_matrix(rvec)
+            matrix = matrix[:3,:3]
+            rvec = cv2.Rodrigues(matrix)
+            rvec = rvec[0]
+
+            for obj_annotation in cloud_annotation_data:
+                # find nearest points for each object and save mask
+                project_points = np.asarray(self._annotation_scene.bin_scene.points)
+                idx = obj_annotation['point_indices']
+                idx = list(map(int, idx))
+                project_points = project_points[idx]
+                #pcd = o3d.geometry.PointCloud()
+                #pcd.points = o3d.utility.Vector3dVector(project_points)
+                #import copy
+                #pcd_r = copy.deepcopy(pcd)
+                #pcd_r.rotate(matrix[:3,:3])
+                #pcd_r.translate(tvec)
+                #bounds = pcd.get_axis_aligned_bounding_box()
+                ##self._scene.setup_camera(60, bounds, bounds.get_center())
+                #center = bounds.get_center()  # TODO this should be changed to origin assuming all cloud will be centered around bin center
+                #eye = np.array([0,0,0]) + np.array([-2.0, 0, 0])
+                #up = np.array([0, 0, 1])
+                #o3d.visualization.draw_geometries([pcd], zoom=1, front=eye, lookat=np.array([0,0,0]), up=up)  # Debug
+                #o3d.visualization.draw_geometries([pcd, pcd_r])  # Debug
+                #project_points = project_points[obj_annotation['point_indices']]
+                points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
+                points_indices = points_indices[0]
+                points_indices = np.around(points_indices)
+                points_indices = points_indices.astype(np.uint16)
+                for index in range(len(idx)):
+                    point = (points_indices[index][0][1], points_indices[index][0][0])
+                    seg_mask[point] = 128
+                cv2.imshow("seg mask", seg_mask)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+                cv2.imwrite("/home/gouda/seg_mask.png", seg_mask)
+                pass
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
@@ -974,6 +1029,7 @@ class AppWindow:
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
             center = bounds.get_center()  # TODO this should be changed to origin assuming all cloud will be centered around bin center
+            center = np.array([0,0,0])
             eye = center + np.array([-0.5, 0, 1])
             up = np.array([0, 0, 1])
             self._scene.look_at(center, eye, up)
