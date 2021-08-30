@@ -716,51 +716,39 @@ class AppWindow:
             depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])
             seg_mask = np.zeros((1200, 1944))
 
-            #tvec = np.array([0, 0, 0], np.float)
-            tvec = np.array([0.004, 0.029, 1.058], np.float)
 
-            #rvec = np.array([0, 0, 0], np.float)
-            #rvec = np.array([0, 0, 0, 1], np.float)
-            rvec = np.array([-0.689, 0.706, -0.132, -0.095], np.float)
+            with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",'scene_transformations.json')) as transformations:
+                data = json.load(transformations)
+                num_of_views = len(data)
 
-            #matrix = o3d.geometry.get_rotation_matrix_from_xyz(tuple(rvec))
-            matrix = quaternion_matrix(rvec)
-            matrix = matrix[:3,:3]
-            rvec = cv2.Rodrigues(matrix)
-            rvec = rvec[0]
+                for count in range(num_of_views):
+                    tvec = np.array([0.004, 0.029, 1.058], np.float)
 
-            for obj_annotation in cloud_annotation_data:
-                # find nearest points for each object and save mask
-                project_points = np.asarray(self._annotation_scene.bin_scene.points)
-                idx = obj_annotation['point_indices']
-                idx = list(map(int, idx))
-                project_points = project_points[idx]
-                #pcd = o3d.geometry.PointCloud()
-                #pcd.points = o3d.utility.Vector3dVector(project_points)
-                #import copy
-                #pcd_r = copy.deepcopy(pcd)
-                #pcd_r.rotate(matrix[:3,:3])
-                #pcd_r.translate(tvec)
-                #bounds = pcd.get_axis_aligned_bounding_box()
-                ##self._scene.setup_camera(60, bounds, bounds.get_center())
-                #center = bounds.get_center()  # TODO this should be changed to origin assuming all cloud will be centered around bin center
-                #eye = np.array([0,0,0]) + np.array([-2.0, 0, 0])
-                #up = np.array([0, 0, 1])
-                #o3d.visualization.draw_geometries([pcd], zoom=1, front=eye, lookat=np.array([0,0,0]), up=up)  # Debug
-                #o3d.visualization.draw_geometries([pcd, pcd_r])  # Debug
-                #project_points = project_points[obj_annotation['point_indices']]
-                points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
-                points_indices = points_indices[0]
-                points_indices = np.around(points_indices)
-                points_indices = points_indices.astype(np.uint16)
-                for index in range(len(idx)):
-                    point = (points_indices[index][0][1], points_indices[index][0][0])
-                    seg_mask[point] = 128
-                cv2.imshow("seg mask", seg_mask)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-                cv2.imwrite("/home/gouda/seg_mask.png", seg_mask)
-                pass
+                    rvec = np.array([-0.689, 0.706, -0.132, -0.095], np.float)
+                    matrix = quaternion_matrix(rvec)
+                    matrix = matrix[:3,:3]
+                    rvec = cv2.Rodrigues(matrix)
+                    rvec = rvec[0]
+
+                    for obj_annotation in cloud_annotation_data:
+                        # find nearest points for each object and save mask
+                        project_points = np.asarray(self._annotation_scene.bin_scene.points)
+                        idx = obj_annotation['point_indices']
+                        idx = list(map(int, idx))
+                        project_points = project_points[idx]
+                        points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
+                        points_indices = points_indices[0]
+                        points_indices = np.around(points_indices)
+                        points_indices = points_indices.astype(np.uint16)
+                        for index in range(len(idx)):
+                            point = (points_indices[index][0][1], points_indices[index][0][0])
+                            seg_mask[point] = 128
+
+                    #cv2.imshow("seg mask", seg_mask)
+                    #cv2.waitKey(0)
+                    #cv2.destroyAllWindows()
+                    cv2.imwrite(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",
+                                             str("seg_mask_") + str(count) + ".png"), seg_mask)
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
@@ -1053,9 +1041,9 @@ class AppWindow:
                     self._annotation_scene.add_obj(obj_geometry, obj_name, translation, orientation)
                     # adding object to the scene
                     rot_mat = obj_geometry.get_rotation_matrix_from_xyz(tuple(orientation))
-                    obj_geometry.rotate(rot_mat, center=center)
                     obj_geometry.translate(translation)
                     center = obj_geometry.get_center()
+                    obj_geometry.rotate(rot_mat, center=center)
                     self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
 
                     active_meshes.append(obj_name)
