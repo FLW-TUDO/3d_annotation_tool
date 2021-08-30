@@ -711,23 +711,26 @@ class AppWindow:
 
             # generate segmented image then save mask in Detectron 2 format
             depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])
-            seg_mask = np.zeros((1200, 1944))
-
 
             with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",'scene_transformations.json')) as transformations:
                 data = json.load(transformations)
                 num_of_views = len(data)
 
                 for count in range(num_of_views):
-                    tvec = np.array([0.004, 0.029, 1.058], np.float)
+                    tvec = data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to bin
+                    tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float)
 
-                    rvec = np.array([-0.689, 0.706, -0.132, -0.095], np.float)
+                    rvec = data[str(count)][2]['rotation_quaternion']
+                    rvec = np.array([rvec['x'], rvec['y'], rvec['z'], rvec['w']], np.float)
                     matrix = quaternion_matrix(rvec)
                     matrix = matrix[:3,:3]
                     rvec = cv2.Rodrigues(matrix)
                     rvec = rvec[0]
 
-                    for obj_annotation in cloud_annotation_data:
+                    seg_mask = np.zeros((1200, 1944))
+
+                    for obj_count in range(len(cloud_annotation_data)):
+                        obj_annotation = cloud_annotation_data[obj_count]
                         # find nearest points for each object and save mask
                         project_points = np.asarray(self._annotation_scene.bin_scene.points)
                         idx = obj_annotation['point_indices']
@@ -739,7 +742,7 @@ class AppWindow:
                         points_indices = points_indices.astype(np.uint16)
                         for index in range(len(idx)):
                             point = (points_indices[index][0][1], points_indices[index][0][0])
-                            seg_mask[point] = 128
+                            seg_mask[point] = (obj_count+1) * 20  # assuming maximum 12 objects per image
 
                     #cv2.imshow("seg mask", seg_mask)
                     #cv2.waitKey(0)
