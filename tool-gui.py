@@ -31,7 +31,7 @@ class AnnotationScene:
         self.obj_list = list()
 
     def add_obj(self, obj_geometry, obj_name, translation=np.array([0, 0, 0], dtype=np.float64),
-                orientation=np.array([0, 0, 0], dtype=np.float64)):
+                orientation=np.identity(3, dtype=np.float64)):
         self.obj_list.append(self.SceneObject(obj_geometry, obj_name, translation, orientation))
 
     def get_objects(self):
@@ -622,7 +622,8 @@ class AppWindow:
             self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
             # update values stored of object
             active_obj.translation += np.array([x, y, z], dtype=np.float64)
-            active_obj.orientation += np.array([rx, ry, rz], dtype=np.float64)
+            active_obj.orientation = np.matmul(rot_mat, active_obj.orientation)
+            pass
 
         if event.type == gui.KeyEvent.DOWN:  # only move objects with down strokes
             # Translation
@@ -678,12 +679,8 @@ class AppWindow:
             for obj in self._annotation_scene.get_objects():
                 obj_data = {"type": str(obj.obj_name[:-2]),
                             "instance": str(obj.obj_name[-1]),
-                            "x": str(obj.translation[0]),
-                            "y": str(obj.translation[1]),
-                            "z": str(obj.translation[2]),
-                            "rx": str(obj.orientation[0]),
-                            "ry": str(obj.orientation[1]),
-                            "rz": str(obj.orientation[2])
+                            "translation": obj.translation.tolist(),
+                            "orientation": obj.orientation.tolist()
                             }
                 pose_data.append(obj_data)
             json.dump(pose_data, f)
@@ -1036,14 +1033,13 @@ class AppWindow:
                     # add object to annotation_scene object
                     obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, obj['type'] + '.pcd'))
                     obj_name = obj['type'] + '_' + obj['instance']
-                    translation = np.array([float(obj['x']), float(obj['y']), float(obj['z'])], dtype=np.float64)
-                    orientation = np.array([float(obj['rx']), float(obj['ry']), float(obj['rz'])], dtype=np.float64)
+                    translation = np.array(np.array(obj['translation']), dtype=np.float64)
+                    orientation = np.array(np.array(obj['orientation']), dtype=np.float64)
                     self._annotation_scene.add_obj(obj_geometry, obj_name, translation, orientation)
                     # adding object to the scene
-                    rot_mat = obj_geometry.get_rotation_matrix_from_xyz(tuple(orientation))
                     obj_geometry.translate(translation)
                     center = obj_geometry.get_center()
-                    obj_geometry.rotate(rot_mat, center=center)
+                    obj_geometry.rotate(orientation, center=center)
                     self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
 
                     active_meshes.append(obj_name)
