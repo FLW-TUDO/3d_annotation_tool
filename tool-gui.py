@@ -768,9 +768,27 @@ class AppWindow:
                         points_indices = points_indices[0]
                         points_indices = np.around(points_indices)
                         points_indices = points_indices.astype(np.uint16)
+                        obj_mask = np.zeros((1200, 1944), dtype=np.uint8)
                         for index in range(len(idx)):
                             point = (points_indices[index][0][1], points_indices[index][0][0])
-                            seg_mask[point] = (obj_count+1) * 20  # assuming maximum 12 objects per image
+                            obj_mask[point] = 255
+
+                        # fill gaps in mask
+                        kernel = np.ones((20, 20), np.uint8)
+                        closing = cv2.morphologyEx(obj_mask, cv2.MORPH_CLOSE, kernel)
+                        #cv2.imshow('closing', closing)
+                        #cv2.waitKey()
+                        #cv2.destroyAllWindows()
+
+                        # Find contours
+                        cnts = cv2.findContours(closing, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+                        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+                        c = max(cnts, key=cv2.contourArea)
+
+                        pixel_val = (obj_count+1) * 20
+                        cv2.fillPoly(closing, pts=[c], color=pixel_val)  # assuming maximum 12 objects per image
+
+                        seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
 
                     #cv2.imshow("seg mask", seg_mask)
                     #cv2.waitKey(0)
