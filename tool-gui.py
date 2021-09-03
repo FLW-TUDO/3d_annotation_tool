@@ -23,7 +23,6 @@ class Scenes:
 
 
 class AnnotationScene:
-    # TODO add functions to add and remove objects that also handle the scene insertion and deletion
     def __init__(self, scene_num, bin_scene):
         self.bin_scene = bin_scene
         self.scene_num = scene_num
@@ -527,7 +526,10 @@ class AppWindow:
         next_button.set_on_clicked(self._on_next_scene)
         generate_save_annotation = gui.Button("generate annotation - save/update")
         generate_save_annotation.set_on_clicked(self._on_generate)
+        refine_position = gui.Button("Refine position")
+        refine_position.set_on_clicked(self._on_refine)
         scene_control.add_child(generate_save_annotation)
+        scene_control.add_child(refine_position)
         scene_control.add_child(pre_button)
         scene_control.add_child(next_button)
         self._settings_panel.add_child(scene_control)
@@ -623,7 +625,6 @@ class AppWindow:
             # update values stored of object
             active_obj.translation += np.array([x, y, z], dtype=np.float64)
             active_obj.orientation = np.matmul(rot_mat, active_obj.orientation)
-            pass
 
         if event.type == gui.KeyEvent.DOWN:  # only move objects with down strokes
             # Translation
@@ -670,6 +671,33 @@ class AppWindow:
                     move(0, 0, 0, 0, 0, -deg * np.pi / 180)
 
         return gui.Widget.EventCallbackResult.HANDLED
+
+    def _on_refine(self):
+        # if no active_mesh selected print error
+        if self._meshes_used.selected_index == -1:
+            self._on_empty_active_meshes()
+            return gui.Widget.EventCallbackResult.HANDLED
+
+        target = self._annotation_scene.bin_scene
+        objects = self._annotation_scene.get_objects()
+        active_obj = objects[self._meshes_used.selected_index]
+        source = active_obj.obj_geometry
+
+        trans_init = np.identity(4)
+        threshold = 0.004
+        radius = 0.002
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=100))
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=100))
+        reg = o3d.pipelines.registration.registration_icp(source, target, threshold, trans_init,
+            o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=50))
+
+        active_obj.obj_geometry.transform(reg.transformation)
+        #active_obj.obj_geometry.paint_uniform_color([0,1,0])  # Debug
+        self._scene.scene.remove_geometry(active_obj.obj_name)
+        self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
+        active_obj.translation += np.array(reg.transformation[0:3, 3], dtype=np.float64)
+        active_obj.orientation = np.matmul(reg.transformation[0:3, 0:3], active_obj.orientation)
 
     def _on_generate(self):
         # write 6D annotation for each object
@@ -1016,7 +1044,6 @@ class AppWindow:
                                            self.settings.material)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
-            center = bounds.get_center()  # TODO this should be changed to origin assuming all cloud will be centered around bin center
             center = np.array([0,0,0])
             eye = center + np.array([-0.5, 0, 1])
             up = np.array([0, 0, 1])
