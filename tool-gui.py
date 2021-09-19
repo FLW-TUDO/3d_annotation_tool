@@ -745,7 +745,7 @@ class AppWindow:
                 num_of_views = len(data)
 
                 for count in range(num_of_views):
-                    tvec = data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to bin
+                    tvec = data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to scene link (bin or table)
                     tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float)
 
                     rvec = data[str(count)][2]['rotation_quaternion']
@@ -757,25 +757,28 @@ class AppWindow:
 
                     seg_mask = np.zeros((1200, 1944))
 
-                    for obj_count in range(len(cloud_annotation_data)):
-                        obj_annotation = cloud_annotation_data[obj_count]
-                        # find nearest points for each object and save mask
-                        project_points = np.asarray(self._annotation_scene.bin_scene.points)
-                        idx = obj_annotation['point_indices']
-                        idx = list(map(int, idx))
-                        project_points = project_points[idx]
+                    obj_count = 0
+                    for obj in self._annotation_scene.get_objects():
+                        project_points = np.array(obj.obj_geometry.points)
                         points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
                         points_indices = points_indices[0]
                         points_indices = np.around(points_indices)
                         points_indices = points_indices.astype(np.uint16)
                         obj_mask = np.zeros((1200, 1944), dtype=np.uint8)
-                        for index in range(len(idx)):
+                        for index in range(project_points.shape[0]):
                             point = (points_indices[index][0][1], points_indices[index][0][0])
-                            obj_mask[point] = 255
+                            #obj_mask[point] = 255
+                            try:
+                                obj_mask[point] = 255
+                            except:
+                                pass
 
                         # fill gaps in mask
-                        kernel = np.ones((20, 20), np.uint8)
+                        closing =  obj_mask
+                        kernel = np.ones((2, 2), np.uint8)
                         closing = cv2.morphologyEx(obj_mask, cv2.MORPH_CLOSE, kernel)
+                        closing = cv2.dilate(obj_mask, kernel, iterations=1)
+
                         #cv2.imshow('closing', closing)
                         #cv2.waitKey()
                         #cv2.destroyAllWindows()
@@ -785,10 +788,12 @@ class AppWindow:
                         cnts = cnts[0] if len(cnts) == 2 else cnts[1]
                         c = max(cnts, key=cv2.contourArea)
 
-                        pixel_val = (obj_count+1) * 20
-                        cv2.fillPoly(closing, pts=[c], color=pixel_val)  # assuming maximum 12 objects per image
+                        pixel_val = (obj_count+1) * 20  # assuming maximum 12 objects per image
+                        cv2.fillPoly(closing, pts=[c], color=pixel_val)
 
                         seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
+
+                        obj_count += 1
 
                     #cv2.imshow("seg mask", seg_mask)
                     #cv2.waitKey(0)
