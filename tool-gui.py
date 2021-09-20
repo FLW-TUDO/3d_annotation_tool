@@ -627,12 +627,15 @@ class AppWindow:
             active_obj.orientation = np.matmul(rot_mat, active_obj.orientation)
 
         if event.type == gui.KeyEvent.DOWN:  # only move objects with down strokes
+            # Refine
+            if event.key == gui.KeyName.R:
+                self._on_refine()
             # Translation
             if not left_shift_modifier:
-                if event.key == gui.KeyName.J:
+                if event.key == gui.KeyName.K:
                     print("j pressed: translate in +ve X direction")
                     move(0.005, 0, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.K:
+                elif event.key == gui.KeyName.J:
                     print("k pressed: translate in +ve X direction")
                     move(-0.005, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.H:
@@ -686,8 +689,8 @@ class AppWindow:
         trans_init = np.identity(4)
         threshold = 0.004
         radius = 0.002
-        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=100))
-        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=100))
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=30))
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius * 2, max_nn=30))
         reg = o3d.pipelines.registration.registration_icp(source, target, threshold, trans_init,
             o3d.pipelines.registration.TransformationEstimationPointToPlane(),
             o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=50))
@@ -803,6 +806,8 @@ class AppWindow:
 
                         pixel_val = (obj_count+1) * 20  # assuming maximum 12 objects per image
                         cv2.fillPoly(closing, pts=[c], color=pixel_val)
+
+                        closing[closing==255] = 0 # remove all pixels not in main contour
 
                         seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
 
@@ -1032,13 +1037,15 @@ class AppWindow:
 
         object_geometry = o3d.io.read_point_cloud(
             self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
+        init_trans = np.array([0, 0, 0.2], dtype=np.float64)
+        object_geometry.translate(init_trans)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
-        self._annotation_scene.add_obj(object_geometry, new_mesh_name, translation=np.array([0,0,0], dtype=np.float64))
+        self._annotation_scene.add_obj(object_geometry, new_mesh_name, translation=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
-        # TODO make this added mesh the highlighted one
+        self._meshes_used.selected_index = len(meshes) - 1
 
     def _remove_mesh(self):
         if not self._annotation_scene.get_objects():
