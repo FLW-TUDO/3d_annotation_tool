@@ -757,8 +757,22 @@ class AppWindow:
 
                     seg_mask = np.zeros((1200, 1944))
 
-                    obj_count = 0
+                    # sort object from closer to farthest so masks occlusion would be generated correctly
+                    dist_to_centers = list()
+                    cam_pose = data[str(count)][0]['translation'] # 1st tranformation is  iiwa_link to camera
+                    cam_pose= np.array([cam_pose['x'], cam_pose['y'], cam_pose['z']], np.float)
+                    scene_center = data[str(count)][1]['translation'] # 2nd tranformation is iiwa_link to scene
+                    scene_center = np.array([scene_center['x'], scene_center['y'], scene_center['z']], np.float)
                     for obj in self._annotation_scene.get_objects():
+                        object_center = obj.obj_geometry.get_center() + scene_center
+                        dist = np.linalg.norm(cam_pose - object_center)
+                        dist_to_centers.append(dist)
+                    sort_index = np.flip(np.argsort(np.array(dist_to_centers)))
+
+                    obj_count = 0 # TODO make a json file for all objects and add mask pixel value for all of them
+                    obj_list = self._annotation_scene.get_objects()
+                    for obj_count in range(len(obj_list)):
+                        obj = obj_list[sort_index[obj_count]]
                         project_points = np.array(obj.obj_geometry.points)
                         points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
                         points_indices = points_indices[0]
@@ -767,11 +781,10 @@ class AppWindow:
                         obj_mask = np.zeros((1200, 1944), dtype=np.uint8)
                         for index in range(project_points.shape[0]):
                             point = (points_indices[index][0][1], points_indices[index][0][0])
-                            #obj_mask[point] = 255
                             try:
                                 obj_mask[point] = 255
                             except:
-                                pass
+                                pass # TODO print warning
 
                         # fill gaps in mask
                         closing =  obj_mask
