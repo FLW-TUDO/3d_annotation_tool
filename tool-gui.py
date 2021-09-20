@@ -1034,7 +1034,7 @@ class AppWindow:
             self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
-        self._annotation_scene.add_obj(object_geometry, new_mesh_name)
+        self._annotation_scene.add_obj(object_geometry, new_mesh_name, translation=np.array([0,0,0], dtype=np.float64))
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
