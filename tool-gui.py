@@ -703,6 +703,24 @@ class AppWindow:
         active_obj.orientation = np.matmul(reg.transformation[0:3, 0:3], active_obj.orientation)
 
     def _on_generate(self):
+        # TODO add this to a json file
+        obj_mask_value = {
+            # our objects
+            'choco_box': 20,
+            'corn_can': 40,
+            'HDMI_cable': 60,
+            'krauter_sauce': 80,
+            'pantene_shampoo': 100,
+            'white_candle': 120,
+            'barilla_spaghetti': 255,
+            # YCB like
+            'cereal_box': 140,
+            'scheuermilch': 160,
+            'scissors': 180,
+            'tomato_can': 200,
+            'waschesteife': 220,
+            'red_bowl': 240,
+        }
         # write 6D annotation for each object
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}", "6d.json")
         with open(json_6d_path, 'w') as f:
@@ -804,12 +822,13 @@ class AppWindow:
                         cnts = cnts[0] if len(cnts) == 2 else cnts[1]
                         c = max(cnts, key=cv2.contourArea)
 
-                        pixel_val = (obj_count+1) * 20  # assuming maximum 12 objects per image
-                        cv2.fillPoly(closing, pts=[c], color=pixel_val)
+                        pixel_val = obj_mask_value[obj.obj_name[:-2]]
+                        #cv2.fillPoly(closing, pts=[c], color=pixel_val)
+                        cv2.fillPoly(seg_mask, pts=[c], color=pixel_val)
 
-                        closing[closing==255] = 0 # remove all pixels not in main contour
+                        #closing[closing==255] = 0 # remove all pixels not in main contour
 
-                        seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
+                        #seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
 
                         obj_count += 1
 
@@ -1071,6 +1090,8 @@ class AppWindow:
 
         try:
             cloud = o3d.io.read_point_cloud(cloud_path)
+            cloud = cloud.voxel_down_sample(0.001) # downsample assembled cloud to make gui faster
+
         except Exception:
             pass
         if cloud is not None:
