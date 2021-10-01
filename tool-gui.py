@@ -15,6 +15,7 @@ isMacOS = (platform.system() == "Darwin")
 
 left_shift_modifier = False
 
+global cloud_path
 
 class Scenes:
     def __init__(self, dataset_path):
@@ -703,6 +704,8 @@ class AppWindow:
         active_obj.orientation = np.matmul(reg.transformation[0:3, 0:3], active_obj.orientation)
 
     def _on_generate(self):
+        global cloud_path
+
         # TODO add this to a json file
         obj_mask_value = {
             # our objects
@@ -737,12 +740,14 @@ class AppWindow:
         # write cloud segmentation annotation - set of points for each object instance
         json_cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",
                                                   'cloud_annotation.json')
+
+        cloud = o3d.io.read_point_cloud(cloud_path)
         cloud_annotation_data = list()
         with open(json_cloud_annotation_path, 'w') as f:
             for scene_obj in self._annotation_scene.get_objects():
                 # find nearest points for each object and save mask
                 obj = scene_obj.obj_geometry
-                scene = self._annotation_scene.bin_scene
+                scene = cloud
                 pcd_tree = o3d.geometry.KDTreeFlann(scene)
                 seg_points = np.zeros(len(scene.points), dtype=bool)
                 for point in obj.points:
@@ -1080,7 +1085,7 @@ class AppWindow:
         self._meshes_used.set_items(meshes)
 
     def scene_load(self, scenes_path, scene_num):
-        # TODO fix: adding new shape after loading previous annotation may have a bug
+        global cloud_path
         cloud_path = os.path.join(scenes_path, f"{scene_num:05}", 'assembled_cloud.pcd')
 
         self._scene.scene.clear_geometry()
