@@ -30,9 +30,8 @@ class AnnotationScene:
 
         self.obj_list = list()
 
-    def add_obj(self, obj_geometry, obj_name, translation=np.array([0, 0, 0], dtype=np.float64),
-                orientation=np.identity(3, dtype=np.float64)):
-        self.obj_list.append(self.SceneObject(obj_geometry, obj_name, translation, orientation))
+    def add_obj(self, obj_geometry, obj_name, transform=np.identity(4)):
+        self.obj_list.append(self.SceneObject(obj_geometry, obj_name, transform))
 
     def get_objects(self):
         return self.obj_list[:]
@@ -41,11 +40,10 @@ class AnnotationScene:
         self.obj_list.pop(index)
 
     class SceneObject:
-        def __init__(self, obj_geometry, obj_name, translation, orientation):
+        def __init__(self, obj_geometry, obj_name, transform):
             self.obj_geometry = obj_geometry
             self.obj_name = obj_name
-            self.translation = translation
-            self.orientation = orientation
+            self.transform = transform
 
 
 class Settings:
@@ -616,16 +614,22 @@ class AppWindow:
         def move(x, y, z, rx, ry, rz):
             objects = self._annotation_scene.get_objects()
             active_obj = objects[self._meshes_used.selected_index]
-            center = active_obj.obj_geometry.get_center()
-            rot_mat = active_obj.obj_geometry.get_rotation_matrix_from_xyz((rx, ry, rz))
-            active_obj.obj_geometry.rotate(rot_mat, center=center)
-            active_obj.obj_geometry.translate(np.array([x, y, z]))
+            # translation or rotation
+            if x!=0 or y!=0 or z!=0:
+                h_transform = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,z],[0,0,0,1]])
+            else: # elif rx!=0 or ry!=0 or rz!=0:
+                center = active_obj.obj_geometry.get_center()
+                rot_mat_obj_center = active_obj.obj_geometry.get_rotation_matrix_from_xyz((rx, ry, rz))
+                T_neg = np.vstack((np.hstack((np.identity(3), -center.reshape(3,1))), [0, 0, 0 ,1]))
+                R = np.vstack((np.hstack((rot_mat_obj_center, [[0],[0],[0]])),[0,0,0,1]))
+                T_pos = np.vstack((np.hstack((np.identity(3), center.reshape(3,1))), [0, 0, 0 ,1]))
+                h_transform = np.matmul(T_pos, np.matmul(R,T_neg))
+            active_obj.obj_geometry.transform(h_transform)
             center = active_obj.obj_geometry.get_center()
             self._scene.scene.remove_geometry(active_obj.obj_name)
             self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
             # update values stored of object
-            active_obj.translation += np.array([x, y, z], dtype=np.float64)
-            active_obj.orientation = np.matmul(rot_mat, active_obj.orientation)
+            active_obj.transform = np.matmul(h_transform, active_obj.transform)
 
         if event.type == gui.KeyEvent.DOWN:  # only move objects with down strokes
             # Refine
@@ -700,8 +704,7 @@ class AppWindow:
         #active_obj.obj_geometry.paint_uniform_color([0,1,0])  # Debug
         self._scene.scene.remove_geometry(active_obj.obj_name)
         self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
-        active_obj.translation += np.array(reg.transformation[0:3, 3], dtype=np.float64)
-        active_obj.orientation = np.matmul(reg.transformation[0:3, 0:3], active_obj.orientation)
+        active_obj.transform = np.matmul(reg.transformation, active_obj.transform)
 
     def _on_generate(self):
         global cloud_path
@@ -731,8 +734,8 @@ class AppWindow:
             for obj in self._annotation_scene.get_objects():
                 obj_data = {"type": str(obj.obj_name[:-2]),
                             "instance": str(obj.obj_name[-1]),
-                            "translation": obj.translation.tolist(),
-                            "orientation": obj.orientation.tolist()
+                            "translation": obj.transform[0:3, 3].tolist(),
+                            "orientation": obj.transform[0:3, 0:3].tolist()
                             }
                 pose_data.append(obj_data)
             json.dump(pose_data, f)
@@ -772,10 +775,10 @@ class AppWindow:
 
                 for count in range(num_of_views):
                     tvec = data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to scene link (bin or table)
-                    tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float)
+                    tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float64)
 
                     rvec = data[str(count)][2]['rotation_quaternion']
-                    rvec = np.array([rvec['x'], rvec['y'], rvec['z'], rvec['w']], np.float)
+                    rvec = np.array([rvec['x'], rvec['y'], rvec['z'], rvec['w']], np.float64)
                     matrix = quaternion_matrix(rvec)
                     matrix = matrix[:3,:3]
                     rvec = cv2.Rodrigues(matrix)
@@ -786,9 +789,10 @@ class AppWindow:
                     # sort object from closer to farthest so masks occlusion would be generated correctly
                     dist_to_centers = list()
                     cam_pose = data[str(count)][0]['translation'] # 1st tranformation is  iiwa_link to camera
-                    cam_pose= np.array([cam_pose['x'], cam_pose['y'], cam_pose['z']], np.float)
+                    cam_pose= np.array([cam_pose['x'], cam_pose['y'], cam_pose['z']], np.float64)
                     scene_center = data[str(count)][1]['translation'] # 2nd tranformation is iiwa_link to scene
-                    scene_center = np.array([scene_center['x'], scene_center['y'], scene_center['z']], np.float)
+                    scene_center = np.array([scene_center['x'], scene_center['y'], scene_center['z']], np.float64)
+                    #pcd_tree = o3d.geometry.KDTreeFlann(cloud)
                     for obj in self._annotation_scene.get_objects():
                         object_center = obj.obj_geometry.get_center() + scene_center
                         dist = np.linalg.norm(cam_pose - object_center)
@@ -1061,11 +1065,12 @@ class AppWindow:
 
         object_geometry = o3d.io.read_point_cloud(
             self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
-        init_trans = np.array([0, 0, 0.2], dtype=np.float64)
-        object_geometry.translate(init_trans)
+        init_trans = np.identity(4)
+        init_trans[2, 3] = 0.2
+        object_geometry.transform(init_trans)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
-        self._annotation_scene.add_obj(object_geometry, new_mesh_name, translation=init_trans)
+        self._annotation_scene.add_obj(object_geometry, new_mesh_name, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
@@ -1134,7 +1139,9 @@ class AppWindow:
                     obj_name = obj['type'] + '_' + obj['instance']
                     translation = np.array(np.array(obj['translation']), dtype=np.float64)
                     orientation = np.array(np.array(obj['orientation']), dtype=np.float64)
-                    self._annotation_scene.add_obj(obj_geometry, obj_name, translation, orientation)
+                    transform = np.concatenate((orientation, translation.reshape(3, 1)), axis=1)
+                    transform = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
+                    self._annotation_scene.add_obj(obj_geometry, obj_name, transform)
                     # adding object to the scene
                     obj_geometry.translate(translation)
                     center = obj_geometry.get_center()
