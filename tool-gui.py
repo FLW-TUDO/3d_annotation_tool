@@ -14,6 +14,8 @@ from tf.transformations import quaternion_matrix
 isMacOS = (platform.system() == "Darwin")
 
 left_shift_modifier = False
+dist = 0.005
+deg = 1
 
 global cloud_path
 
@@ -606,6 +608,17 @@ class AppWindow:
                 left_shift_modifier = False
             return gui.Widget.EventCallbackResult.HANDLED
 
+        # if ctrl is pressed then increase translation and angle values
+        global dist, deg
+        if event.key == gui.KeyName.LEFT_CONTROL:
+            if event.type == gui.KeyEvent.DOWN:
+                dist = 0.05
+                deg = 90
+            elif event.type == gui.KeyEvent.UP:
+                dist = 0.005
+                deg = 1
+            return gui.Widget.EventCallbackResult.HANDLED
+
         # if no active_mesh selected print error
         if self._meshes_used.selected_index == -1:
             self._on_empty_active_meshes()
@@ -639,26 +652,25 @@ class AppWindow:
             if not left_shift_modifier:
                 if event.key == gui.KeyName.K:
                     print("j pressed: translate in +ve X direction")
-                    move(0.005, 0, 0, 0, 0, 0)
+                    move(dist, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.J:
                     print("k pressed: translate in +ve X direction")
-                    move(-0.005, 0, 0, 0, 0, 0)
+                    move(-dist, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.H:
                     print("h pressed: translate in +ve Y direction")
-                    move(0, 0.005, 0, 0, 0, 0)
+                    move(0, dist, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.L:
                     print("l pressed: translate in -ve Y direction")
-                    move(0, -0.005, 0, 0, 0, 0)
+                    move(0, -dist, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.I:
                     print("i pressed: translate in +ve Z direction")
-                    move(0, 0, 0.005, 0, 0, 0)
+                    move(0, 0, dist, 0, 0, 0)
                 elif event.key == gui.KeyName.COMMA:
                     print(", pressed: translate in -ve Z direction")
-                    move(0, 0, -0.005, 0, 0, 0)
+                    move(0, 0, -dist, 0, 0, 0)
             # Rotation - keystrokes are not in same order as translation to make movement more human intuitive
             else:
                 print("Left-Shift is clicked; rotation mode")
-                deg = 3  # degree
                 if event.key == gui.KeyName.L:
                     print("j pressed: rotate around +ve X direction")
                     move(0, 0, 0, deg * np.pi / 180, 0, 0)
@@ -766,7 +778,7 @@ class AppWindow:
                 cloud_annotation_data.append(obj_data)
             json.dump(cloud_annotation_data, f)
 
-            # generate segmented image then save mask in Detectron 2 format
+            # generate segmented image
             depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])
 
             with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:05}",'scene_transformations.json')) as transformations:
