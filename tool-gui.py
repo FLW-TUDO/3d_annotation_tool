@@ -1198,7 +1198,7 @@ class AppWindow:
             # if os.path.exists(json_path):
             with open(scene_gt_path) as scene_gt_file:
                 data = json.load(scene_gt_file)
-                scene_data = data[str(int(self._annotation_scene.scene_num))]
+                scene_data = data["0"] # scene is always loaded with annotations from scene 0
                 obj_list = list()
                 active_meshes = list()
                 for obj in scene_data:
