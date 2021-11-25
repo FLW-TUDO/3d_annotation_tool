@@ -740,13 +740,30 @@ class AppWindow:
             'red_bowl': 240,
         }
 
+        # TODO delete. Tmp untill converting old annotations to BOP
+        obj_bop_id = {
+            "choco_box": 1,
+            "corn_can": 2,
+            "HDMI_cable": 3,
+            "krauter_sauce": 4,
+            "pantene_shampoo": 5,
+            "white_candle": 6,
+            "barilla_spaghetti": 7,
+            "cereal_box": 8,
+            "scheuermilch": 9,
+             "scissors": 10,
+             "tomato_can": 11,
+             "waschesteife": 12,
+             "red_bowl": 13
+        }
+
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
 
         with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}",'scene_transformations.json')) as transformations:
             trans_data = json.load(transformations)
             num_of_views = len(trans_data)
 
-        # generate "scene_gt_info.json": write 6D annotation for each object in all view angles
+        # generate "scene_gt.json": write 6D annotation for each object in all view angles
         with open(json_6d_path, 'w+') as gt_scene:
             gt_6d_pose_data = {}
             for view in range(num_of_views):
@@ -766,13 +783,15 @@ class AppWindow:
                     transform_scene_to_object = obj.transform
                     transform_cam_to_object = np.matmul(transform_cam_to_scene, transform_scene_to_object)
                     obj_data = {
-                                "cam_R_w2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
-                                "cam_t_w2c": transform_cam_to_object[0:3, 3].tolist(),  # translation
-                                "obj_id": str(obj.obj_name[:-2])  # TODO add id instead of name
+                                "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
+                                "cam_t_m2c": transform_cam_to_object[0:3, 3].tolist(),  # translation
+                                "obj_id": obj_bop_id[str(obj.obj_name[:-2])]  # TODO add id instead of name
                                 }
                     view_angle_data.append(obj_data)
                 gt_6d_pose_data[str(view)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
+
+        return
 
         depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])  # for Zivid Two camera
 
@@ -781,7 +800,7 @@ class AppWindow:
         with open(scene_camera_path, 'w+') as scene_camera:
             scene_camera_date = {}
             for view in range(num_of_views):
-                scene_camera_date[str(view)] = {"cam_K": list(depth_k.flatten()), "depth_scale": 1.0}
+                scene_camera_date[str(view)] = {"cam_K": list(depth_k.flatten()), "depth_scale": 0.1}
                 # TODO change depth scale if changed during collection
             json.dump(scene_camera_date, scene_camera)
 
@@ -805,7 +824,7 @@ class AppWindow:
                 #o3d.visualization.draw_geometries([scene])  # Debug
                 seg_idx = np.where(seg_points == True)[0]
                 obj_data = {"type": str(scene_obj.obj_name[:-2]),
-                            "instance": str(scene_obj.obj_name[-1]),
+                            #"instance": str(scene_obj.obj_name[-1]),
                             "point_indices": list(map(str, seg_idx))
                             }
                 cloud_annotation_data.append(obj_data)
@@ -1171,27 +1190,50 @@ class AppWindow:
 
             # load values if an annotation already exists
             # TODO this should load the first view angle only
-            json_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", '6d.json')
+            with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
+                model_names = json.load(model_names_json)
+            with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'scene_transformations.json')) as transformations:
+                trans_data = json.load(transformations)
+            scene_gt_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'scene_gt.json')
             # if os.path.exists(json_path):
-            with open(json_path) as json_file:
-                data = json.load(json_file)
+            with open(scene_gt_path) as scene_gt_file:
+                data = json.load(scene_gt_file)
+                scene_data = data[str(int(self._annotation_scene.scene_num))]
                 obj_list = list()
                 active_meshes = list()
-                for obj in data:
+                for obj in scene_data:
                     # add object to annotation_scene object
-                    obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, obj['type'] + '.pcd'))
-                    obj_name = obj['type'] + '_' + obj['instance']
-                    translation = np.array(np.array(obj['translation']), dtype=np.float64)
-                    orientation = np.array(np.array(obj['orientation']), dtype=np.float64)
-                    transform = np.concatenate((orientation, translation.reshape(3, 1)), axis=1)
-                    transform = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
-                    self._annotation_scene.add_obj(obj_geometry, obj_name, transform)
-                    # adding object to the scene
-                    obj_geometry.translate(translation)
-                    center = obj_geometry.get_center()
-                    obj_geometry.rotate(orientation, center=center)
-                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
+                    obj_geometry = o3d.io.read_triangle_mesh(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
+                    #obj_name = obj['type'] + '_' + obj['instance']
+                    obj_name = model_names[str(obj['obj_id'])]['name']
+                    translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64)
+                    orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
+                    transform = np.concatenate((orientation.reshape((3,3)), translation.reshape(3, 1)), axis=1)
+                    transform_cam_to_obj = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
 
+                    # transform 6D pose from camera frame to scene frame
+                    assert trans_data["0"][2]['source_frame'] == 'zivid_optical_frame'
+                    assert trans_data["0"][2]['target_frame'] == 'scene_link'
+                    # transform object center to camera frame
+                    t = trans_data["0"][2]['translation']
+                    t = np.array([t['x'], t['y'], t['z']])
+                    quaternion = trans_data["0"][2]['rotation_quaternion']
+                    quaternion = np.array([quaternion['w'], quaternion['x'], quaternion['y'], quaternion['z']])
+                    R = o3d.geometry.get_rotation_matrix_from_quaternion(quaternion)
+                    transform_cam_to_scene = np.vstack((np.hstack((R, t[:, None])), [0, 0, 0, 1]))
+
+                    R_inv = np.transpose(R)
+                    t_inv = - np.matmul(np.transpose(R), t)
+                    transform_scene_to_cam = np.vstack((np.hstack((R_inv, t_inv[:, None])), [0, 0, 0, 1]))
+
+                    transform_scene_to_object = np.matmul(transform_scene_to_cam, transform_cam_to_obj)
+
+                    self._annotation_scene.add_obj(obj_geometry, obj_name, transform_scene_to_object)
+                    # adding object to the scene
+                    obj_geometry.translate(transform_scene_to_object[0:3,3])
+                    center = obj_geometry.get_center()
+                    obj_geometry.rotate(transform_scene_to_object[0:3, 0:3], center=center)
+                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
                     active_meshes.append(obj_name)
             self._meshes_used.set_items(active_meshes)
 
