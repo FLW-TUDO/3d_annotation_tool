@@ -742,6 +742,7 @@ class AppWindow:
 
         with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
             model_names = json.load(model_names_json)
+            model_ids = {y['name']: x for x, y in model_names.items()}
 
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
 
@@ -771,13 +772,11 @@ class AppWindow:
                     obj_data = {
                                 "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
                                 "cam_t_m2c": transform_cam_to_object[0:3, 3].tolist(),  # translation
-                                "obj_id": model_names[str(obj.obj_name[:-2])]  # TODO add id instead of name
+                                "obj_id": int(model_ids[obj.obj_name[:-2]])  # TODO add id instead of name
                                 }
                     view_angle_data.append(obj_data)
                 gt_6d_pose_data[str(view)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
-
-        return
 
         depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])  # for Zivid Two camera
 
