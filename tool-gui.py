@@ -740,22 +740,8 @@ class AppWindow:
             'red_bowl': 240,
         }
 
-        # TODO delete. Tmp untill converting old annotations to BOP
-        obj_bop_id = {
-            "choco_box": 1,
-            "corn_can": 2,
-            "HDMI_cable": 3,
-            "krauter_sauce": 4,
-            "pantene_shampoo": 5,
-            "white_candle": 6,
-            "barilla_spaghetti": 7,
-            "cereal_box": 8,
-            "scheuermilch": 9,
-             "scissors": 10,
-             "tomato_can": 11,
-             "waschesteife": 12,
-             "red_bowl": 13
-        }
+        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
+            model_names = json.load(model_names_json)
 
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
 
@@ -785,7 +771,7 @@ class AppWindow:
                     obj_data = {
                                 "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
                                 "cam_t_m2c": transform_cam_to_object[0:3, 3].tolist(),  # translation
-                                "obj_id": obj_bop_id[str(obj.obj_name[:-2])]  # TODO add id instead of name
+                                "obj_id": model_names[str(obj.obj_name[:-2])]  # TODO add id instead of name
                                 }
                     view_angle_data.append(obj_data)
                 gt_6d_pose_data[str(view)] = view_angle_data
@@ -1109,28 +1095,34 @@ class AppWindow:
     def _on_about_ok(self):
         self.window.close_dialog()
 
+    def _obj_instance_count(self, meshes):
+        types = [i[:-2] for i in meshes]
+        equal_values = [i for i in range(len(types)) if types[i] == self._meshes_available.selected_value]
+        count = 0
+        if len(equal_values):
+            indices = np.array(meshes)
+            indices = indices[equal_values]
+            indices = [int(x[-1]) for x in indices]
+            count = max(indices) + 1
+            # TODO change to fill the numbers missing in sequence
+        return str(count)
+
     def _add_mesh(self):
         meshes = self._annotation_scene.get_objects()
         meshes = [i.obj_name for i in meshes]
 
-        def which_count():
-            types = [i[:-2] for i in meshes]
-            equal_values = [i for i in range(len(types)) if types[i] == self._meshes_available.selected_value]
-            count = 0
-            if len(equal_values):
-                indices = np.array(meshes)
-                indices = indices[equal_values]
-                indices = [int(x[-1]) for x in indices]
-                count = max(indices) + 1
-                # TODO change to fill the numbers missing in sequence
-            return str(count)
+        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
+            model_names = json.load(model_names_json)
+            model_ids = {y['name']: x for x, y in model_names.items()}
+
+        model_name = f'{int(model_ids[self._meshes_available.selected_value]):06}'
 
         object_geometry = o3d.io.read_point_cloud(
-            self.scenes.objects_path + '/' + self._meshes_available.selected_value + '.pcd')
+            self.scenes.objects_path + '/obj_' + model_name + '.ply')
         init_trans = np.identity(4)
         init_trans[2, 3] = 0.2
         object_geometry.transform(init_trans)
-        new_mesh_name = str(self._meshes_available.selected_value) + '_' + which_count()
+        new_mesh_name = str(self._meshes_available.selected_value) + '_' + self._obj_instance_count(meshes)
         self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
@@ -1162,6 +1154,7 @@ class AppWindow:
 
         try:
             cloud = o3d.io.read_point_cloud(cloud_path)
+            # TODO downsample at the visualizer loading and delete it here
             cloud = cloud.voxel_down_sample(0.001) # downsample assembled cloud to make gui faster
 
         except Exception:
@@ -1203,9 +1196,13 @@ class AppWindow:
                 active_meshes = list()
                 for obj in scene_data:
                     # add object to annotation_scene object
-                    obj_geometry = o3d.io.read_triangle_mesh(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
+                    obj_mesh = o3d.io.read_triangle_mesh(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
+                    obj_geometry = o3d.geometry.PointCloud()
+                    obj_geometry.points = obj_mesh.vertices
+                    obj_geometry.colors = obj_mesh.vertex_colors
+                    obj_geometry.normals = obj_mesh.vertex_normals
                     #obj_name = obj['type'] + '_' + obj['instance']
-                    obj_name = model_names[str(obj['obj_id'])]['name']
+                    obj_name = model_names[str(obj['obj_id'])]['name'] + '_' + self._obj_instance_count(active_meshes)
                     translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64)
                     orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
                     transform = np.concatenate((orientation.reshape((3,3)), translation.reshape(3, 1)), axis=1)
@@ -1253,9 +1250,14 @@ class AppWindow:
         self._scene.scene.scene.render_to_image(on_image)
 
     def update_obj_list(self):
-        objects_list = os.listdir(self.scenes.objects_path)
+        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
+            model_names = json.load(model_names_json)
+
+        os.chdir(self.scenes.objects_path)
+        objects_list = glob.glob("*.ply")
         objects_list = [x.split('.')[0] for x in objects_list]
-        self._meshes_available.set_items(objects_list)
+        objects_names = [model_names[str(int(x[4:]))]['name'] for x in objects_list]
+        self._meshes_available.set_items(objects_names)
 
     def _on_next_scene(self):
         # TODO handle overflow
