@@ -769,9 +769,10 @@ class AppWindow:
                     transform_cam_to_scene = np.vstack((np.hstack((R, t[:, None])), [0, 0, 0, 1]))
                     transform_scene_to_object = obj.transform
                     transform_cam_to_object = np.matmul(transform_cam_to_scene, transform_scene_to_object)
+                    translation = list(transform_cam_to_object[0:3, 3] * 1000) # convert meter to mm
                     obj_data = {
                                 "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
-                                "cam_t_m2c": transform_cam_to_object[0:3, 3].tolist(),  # translation
+                                "cam_t_m2c": translation,  # translation
                                 "obj_id": int(model_ids[obj.obj_name[:-2]])  # TODO add id instead of name
                                 }
                     view_angle_data.append(obj_data)
@@ -791,8 +792,10 @@ class AppWindow:
 
         # write cloud segmentation annotation - set of points for each object instance
         # TODO generate annotations for other scene clouds
-        json_cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}",
-                                                  'cloud_annotation/assembled_cloud.json')
+        cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'cloud_annotation')
+        if not os.path.exists(cloud_annotation_path):
+            os.makedirs(cloud_annotation_path)
+        json_cloud_annotation_path = os.path.join(cloud_annotation_path, 'assembled_cloud.json')
         cloud = o3d.io.read_point_cloud(cloud_path)
         cloud_annotation_data = list()
         with open(json_cloud_annotation_path, 'w+') as f:
@@ -817,6 +820,9 @@ class AppWindow:
 
             # generate segmented image
 
+            image_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "mask_all")
+            if not os.path.exists(image_annotation_path):
+                os.makedirs(image_annotation_path)
             for count in range(num_of_views):
                 tvec = trans_data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to scene link (bin or table)
                 tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float64)
@@ -891,8 +897,7 @@ class AppWindow:
                 #cv2.imshow("seg mask", seg_mask)
                 #cv2.waitKey(0)
                 #cv2.destroyAllWindows()
-                cv2.imwrite(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "mask_all",
-                                         f"{count:06}" + ".png"), seg_mask)
+                cv2.imwrite(os.path.join(image_annotation_path, f"{count:06}" + ".png"), seg_mask)
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
@@ -1116,8 +1121,8 @@ class AppWindow:
 
         model_name = f'{int(model_ids[self._meshes_available.selected_value]):06}'
 
-        object_geometry = o3d.io.read_point_cloud(
-            self.scenes.objects_path + '/obj_' + model_name + '.ply')
+        object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/obj_' + model_name + '.ply')
+        object_geometry.points = o3d.utility.Vector3dVector(np.array(object_geometry.points) / 1000)  # convert meter to mm
         init_trans = np.identity(4)
         init_trans[2, 3] = 0.2
         object_geometry.transform(init_trans)
@@ -1195,14 +1200,10 @@ class AppWindow:
                 active_meshes = list()
                 for obj in scene_data:
                     # add object to annotation_scene object
-                    obj_mesh = o3d.io.read_triangle_mesh(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
-                    obj_geometry = o3d.geometry.PointCloud()
-                    obj_geometry.points = obj_mesh.vertices
-                    obj_geometry.colors = obj_mesh.vertex_colors
-                    obj_geometry.normals = obj_mesh.vertex_normals
-                    #obj_name = obj['type'] + '_' + obj['instance']
+                    obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
+                    obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points) / 1000)  # convert meter to mm
                     obj_name = model_names[str(obj['obj_id'])]['name'] + '_' + self._obj_instance_count(active_meshes)
-                    translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64)
+                    translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000 # convert to meter
                     orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
                     transform = np.concatenate((orientation.reshape((3,3)), translation.reshape(3, 1)), axis=1)
                     transform_cam_to_obj = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
