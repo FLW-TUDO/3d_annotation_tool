@@ -640,7 +640,7 @@ class AppWindow:
             active_obj.obj_geometry.transform(h_transform)
             center = active_obj.obj_geometry.get_center()
             self._scene.scene.remove_geometry(active_obj.obj_name)
-            self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
+            self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
             # update values stored of object
             active_obj.transform = np.matmul(h_transform, active_obj.transform)
 
@@ -715,7 +715,7 @@ class AppWindow:
         active_obj.obj_geometry.transform(reg.transformation)
         #active_obj.obj_geometry.paint_uniform_color([0,1,0])  # Debug
         self._scene.scene.remove_geometry(active_obj.obj_name)
-        self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material)
+        self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
         active_obj.transform = np.matmul(reg.transformation, active_obj.transform)
 
     def _on_generate(self):
@@ -786,7 +786,7 @@ class AppWindow:
         with open(scene_camera_path, 'w+') as scene_camera:
             scene_camera_date = {}
             for view in range(num_of_views):
-                scene_camera_date[str(view)] = {"cam_K": list(depth_k.flatten()), "depth_scale": 0.1}
+                scene_camera_date[str(view)] = {"cam_K": list(depth_k.flatten()), "depth_scale": 1.0}
                 # TODO change depth scale if changed during collection
             json.dump(scene_camera_date, scene_camera)
 
@@ -1127,7 +1127,7 @@ class AppWindow:
         init_trans[2, 3] = 0.2
         object_geometry.transform(init_trans)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + self._obj_instance_count(meshes)
-        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material)
+        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
@@ -1173,8 +1173,7 @@ class AppWindow:
             print("[WARNING] Failed to read points", cloud_path)
 
         try:
-            self._scene.scene.add_geometry("__model__", geometry,
-                                           self.settings.material)
+            self._scene.scene.add_geometry("__model__", geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
             center = np.array([0,0,0])
@@ -1230,7 +1229,7 @@ class AppWindow:
                     obj_geometry.translate(transform_scene_to_object[0:3,3])
                     center = obj_geometry.get_center()
                     obj_geometry.rotate(transform_scene_to_object[0:3, 0:3], center=center)
-                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material)
+                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
                     active_meshes.append(obj_name)
             self._meshes_used.set_items(active_meshes)
 
