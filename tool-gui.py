@@ -6,10 +6,10 @@ import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 import os
 import platform
-import pathlib
 import json
 import cv2
 from tf.transformations import quaternion_matrix
+import argparse
 
 isMacOS = (platform.system() == "Darwin")
 
@@ -19,9 +19,10 @@ deg = 1
 
 global cloud_path
 
+
 class Scenes:
-    def __init__(self, dataset_path):
-        self.scenes_path = os.path.join(dataset_path, 'train')
+    def __init__(self, dataset_path, dataset_split):
+        self.scenes_path = os.path.join(dataset_path, dataset_split)
         self.objects_path = os.path.join(dataset_path, 'models')
 
 
@@ -182,10 +183,10 @@ class Settings:
 
         self.apply_material = True  # clear to False after processing
         self._materials = {
-            Settings.LIT: rendering.Material(),
-            Settings.UNLIT: rendering.Material(),
-            Settings.NORMALS: rendering.Material(),
-            Settings.DEPTH: rendering.Material()
+            Settings.LIT: rendering.MaterialRecord(),
+            Settings.UNLIT: rendering.MaterialRecord(),
+            Settings.NORMALS: rendering.MaterialRecord(),
+            Settings.DEPTH: rendering.MaterialRecord()
         }
         self._materials[Settings.LIT].base_color = [0.9, 0.9, 0.9, 1.0]
         self._materials[Settings.LIT].shader = Settings.LIT
@@ -1271,25 +1272,26 @@ class AppWindow:
 
 
 def main():
-    # We need to initalize the application, which finds the necessary shaders
-    # for rendering and prepares the cross-platform window abstraction.
-    gui.Application.instance.initialize()
+    parser = argparse.ArgumentParser(description="Manual annotation tool for BOP format")
+    parser.add_argument("dataset-path", type=str, help="dataset path")
+    parser.add_argument("dataset-split", type=str,
+                        help="dataset split to load (train[_TRAINTYPE], val[_VALTYPE], test[_TESTTYPE])")
+    parser.add_argument("--start-scene_numb", type=int, help="Scene to start annotation from", default=0)
+    args = parser.parse_args()
 
-    #dataset_path = os.path.join(pathlib.Path().absolute(), 'dataset')  # TODO make a gui window that asks for dataset path
-    dataset_path = '/home/gouda/segmentation/datasets/ML2R_segmentation_dataset_BOP_format'
-
-    scenes = Scenes(dataset_path)
-
+    scenes = Scenes(args.dataset_path)
     w = AppWindow(2048, 1536, scenes)
 
-    start_scene_num = 0  # TODO: change it to load last annotated scene from json
     if os.path.exists(scenes.scenes_path) and os.path.exists(scenes.objects_path):
-        w.scene_load(scenes.scenes_path, start_scene_num)
+        w.scene_load(scenes.scenes_path, args.start_scene_num)
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
-                                  "Could not scenes or object meshes folders " + scenes.scenes_path + "/" + scenes.objects_path)
+            "Could not find scenes or object meshes folders " + scenes.scenes_path + "/" + scenes.objects_path)
+        print("Could not find scene or object meshes folder")
         exit()
+
+    gui.Application.instance.initialize()
 
     # Run the event loop. This will not return until the last window is closed.
     gui.Application.instance.run()
