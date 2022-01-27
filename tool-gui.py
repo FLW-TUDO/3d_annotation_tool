@@ -14,7 +14,7 @@ import argparse
 isMacOS = (platform.system() == "Darwin")
 
 left_shift_modifier = False
-dist = 0.005
+dist = 0.002
 deg = 1
 
 global cloud_path
@@ -1100,9 +1100,9 @@ class AppWindow:
     def _on_about_ok(self):
         self.window.close_dialog()
 
-    def _obj_instance_count(self, meshes):
+    def _obj_instance_count(self, mesh_to_add, meshes):
         types = [i[:-2] for i in meshes]
-        equal_values = [i for i in range(len(types)) if types[i] == self._meshes_available.selected_value]
+        equal_values = [i for i in range(len(types)) if types[i] == mesh_to_add]
         count = 0
         if len(equal_values):
             indices = np.array(meshes)
@@ -1127,8 +1127,9 @@ class AppWindow:
         init_trans = np.identity(4)
         init_trans[2, 3] = 0.2
         object_geometry.transform(init_trans)
-        new_mesh_name = str(self._meshes_available.selected_value) + '_' + self._obj_instance_count(meshes)
-        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+        new_mesh_name = str(self._meshes_available.selected_value) + '_' + self._obj_instance_count(self._meshes_available.selected_value,meshes)
+        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material,
+                                       add_downsampled_copy_for_fast_rendering=True)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
@@ -1200,10 +1201,13 @@ class AppWindow:
                 active_meshes = list()
                 for obj in scene_data:
                     # add object to annotation_scene object
-                    obj_geometry = o3d.io.read_point_cloud(os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
-                    obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points) / 1000)  # convert meter to mm
-                    obj_name = model_names[str(obj['obj_id'])]['name'] + '_' + self._obj_instance_count(active_meshes)
-                    translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000 # convert to meter
+                    obj_geometry = o3d.io.read_point_cloud(
+                        os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
+                    obj_geometry.points = o3d.utility.Vector3dVector(
+                        np.array(obj_geometry.points) / 1000)  # convert meter to mm
+                    model_name = model_names[str(obj['obj_id'])]['name']
+                    obj_name = model_name + '_' + self._obj_instance_count(model_name,active_meshes)
+                    translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000  # convert to meter
                     orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
                     transform = np.concatenate((orientation.reshape((3,3)), translation.reshape(3, 1)), axis=1)
                     transform_cam_to_obj = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
@@ -1279,7 +1283,8 @@ def main():
     parser.add_argument("--start-scene_numb", type=int, help="Scene to start annotation from", default=0)
     args = parser.parse_args()
 
-    scenes = Scenes(args.dataset_path)
+    scenes = Scenes(args.dataset_path, args.dataset_split)
+    gui.Application.instance.initialize()
     w = AppWindow(2048, 1536, scenes)
 
     if os.path.exists(scenes.scenes_path) and os.path.exists(scenes.objects_path):
@@ -1287,11 +1292,9 @@ def main():
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
-            "Could not find scenes or object meshes folders " + scenes.scenes_path + "/" + scenes.objects_path)
+                                  "Could not find scenes or object meshes folders " + scenes.scenes_path + "/" + scenes.objects_path)
         print("Could not find scene or object meshes folder")
         exit()
-
-    gui.Application.instance.initialize()
 
     # Run the event loop. This will not return until the last window is closed.
     gui.Application.instance.run()
