@@ -648,22 +648,22 @@ class AppWindow:
                 self._on_refine()
             # Translation
             if not left_shift_modifier:
-                if event.key == gui.KeyName.K:
+                if event.key == gui.KeyName.L:
                     print("j pressed: translate in +ve X direction")
                     move(dist, 0, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.J:
-                    print("k pressed: translate in +ve X direction")
-                    move(-dist, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.H:
+                    print("k pressed: translate in -ve X direction")
+                    move(-dist, 0, 0, 0, 0, 0)
+                elif event.key == gui.KeyName.COMMA:
                     print("h pressed: translate in +ve Y direction")
                     move(0, dist, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.L:
+                elif event.key == gui.KeyName.I:
                     print("l pressed: translate in -ve Y direction")
                     move(0, -dist, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.I:
+                elif event.key == gui.KeyName.K:
                     print("i pressed: translate in +ve Z direction")
                     move(0, 0, dist, 0, 0, 0)
-                elif event.key == gui.KeyName.COMMA:
+                elif event.key == gui.KeyName.J:
                     print(", pressed: translate in -ve Z direction")
                     move(0, 0, -dist, 0, 0, 0)
             # Rotation - keystrokes are not in same order as translation to make movement more human intuitive
@@ -671,22 +671,22 @@ class AppWindow:
                 print("Left-Shift is clicked; rotation mode")
                 if event.key == gui.KeyName.L:
                     print("j pressed: rotate around +ve X direction")
-                    move(0, 0, 0, deg * np.pi / 180, 0, 0)
+                    move(0, 0, 0, 0, deg * np.pi / 180, 0)
                 elif event.key == gui.KeyName.H:
                     print("k pressed: rotate around -ve X direction")
-                    move(0, 0, 0, -deg * np.pi / 180, 0, 0)
-                elif event.key == gui.KeyName.I:
-                    print("h pressed: rotate around +ve Y direction")
-                    move(0, 0, 0, 0, deg * np.pi / 180, 0)
-                elif event.key == gui.KeyName.COMMA:
-                    print("l pressed: rotate around -ve Y direction")
                     move(0, 0, 0, 0, -deg * np.pi / 180, 0)
-                elif event.key == gui.KeyName.J:
-                    print("i pressed: rotate around +ve Z direction")
-                    move(0, 0, 0, 0, 0, deg * np.pi / 180)
                 elif event.key == gui.KeyName.K:
-                    print(", pressed: rotate around -ve Z direction")
+                    print("h pressed: rotate around +ve Y direction")
+                    move(0, 0, 0, 0, 0, deg * np.pi / 180)
+                elif event.key == gui.KeyName.J:
+                    print("l pressed: rotate around -ve Y direction")
                     move(0, 0, 0, 0, 0, -deg * np.pi / 180)
+                elif event.key == gui.KeyName.COMMA:
+                    print("i pressed: rotate around +ve Z direction")
+                    move(0, 0, 0, deg * np.pi / 180, 0, 0)
+                elif event.key == gui.KeyName.I:
+                    print(", pressed: rotate around -ve Z direction")
+                    move(0, 0, 0, -deg * np.pi / 180, 0, 0)
 
         return gui.Widget.EventCallbackResult.HANDLED
 
@@ -717,45 +717,27 @@ class AppWindow:
         active_obj.transform = np.matmul(reg.transformation, active_obj.transform)
 
     def _on_generate(self):
-        global cloud_path
-
-        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
-            model_names = json.load(model_names_json)
-            model_ids = {y['name']: x for x, y in model_names.items()}
+        view = 0  # TODO: change when sample number and scene number are implemented
+        model_names = self.load_model_names()
 
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
-
-        with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}",'scene_transformations.json')) as transformations:
-            trans_data = json.load(transformations)
-            num_of_views = len(trans_data)
 
         # generate "scene_gt.json": write 6D annotation for each object in all view angles
         with open(json_6d_path, 'w+') as gt_scene:
             gt_6d_pose_data = {}
-            for view in range(num_of_views):
-                view_angle_data = list()
-                for obj in self._annotation_scene.get_objects():
-                    # check that 3rd transform is the right transform between camera and scene
-                    # 3rd (index 2) transformation is from cam to scene
-                    assert trans_data[str(view)][2]['source_frame'] == 'zivid_optical_frame'
-                    assert trans_data[str(view)][2]['target_frame'] == 'scene_link'
-                    # transform object center to camera frame
-                    t = trans_data[str(view)][2]['translation']
-                    t = np.array([t['x'], t['y'], t['z']])
-                    quaternion = trans_data[str(view)][2]['rotation_quaternion']
-                    quaternion = np.array([quaternion['w'], quaternion['x'], quaternion['y'], quaternion['z']])
-                    R = o3d.geometry.get_rotation_matrix_from_quaternion(quaternion)
-                    transform_cam_to_scene = np.vstack((np.hstack((R, t[:, None])), [0, 0, 0, 1]))
-                    transform_scene_to_object = obj.transform
-                    transform_cam_to_object = np.matmul(transform_cam_to_scene, transform_scene_to_object)
-                    translation = list(transform_cam_to_object[0:3, 3] * 1000) # convert meter to mm
-                    obj_data = {
-                                "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
-                                "cam_t_m2c": translation,  # translation
-                                "obj_id": int(model_ids[obj.obj_name[:-2]])  # TODO add id instead of name
-                                }
-                    view_angle_data.append(obj_data)
-                gt_6d_pose_data[str(view)] = view_angle_data
+            view_angle_data = list()
+            for obj in self._annotation_scene.get_objects():
+                transform_cam_to_object = obj.transform
+                translation = list(transform_cam_to_object[0:3, 3] * 1000) # convert meter to mm
+                model_names = self.load_model_names()
+                obj_id = model_names.index(obj.obj_name[:-2]) + 1 # assuming max number of object of same object 10
+                obj_data = {
+                            "cam_R_m2c": transform_cam_to_object[0:3, 0:3].tolist(),  # rotation matrix
+                            "cam_t_m2c": translation,  # translation
+                            "obj_id": obj_id  # TODO add id instead of name
+                           }
+                view_angle_data.append(obj_data)
+            gt_6d_pose_data[str(view)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
 
 
@@ -975,20 +957,13 @@ class AppWindow:
         meshes = self._annotation_scene.get_objects()
         meshes = [i.obj_name for i in meshes]
 
-        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
-            model_names = json.load(model_names_json)
-            model_ids = {y['name']: x for x, y in model_names.items()}
-
-        model_name = f'{int(model_ids[self._meshes_available.selected_value]):06}'
-
-        object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/obj_' + model_name + '.ply')
-        object_geometry.points = o3d.utility.Vector3dVector(np.array(object_geometry.points) / 1000)  # convert meter to mm
+        object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/obj_' + f'{self._meshes_available.selected_index+1:06}' + '.ply')
+        object_geometry.points = o3d.utility.Vector3dVector(np.array(object_geometry.points) / 1000)  # convert mm to meter
         init_trans = np.identity(4)
         init_trans[2, 3] = 0.2
         object_geometry.transform(init_trans)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + self._obj_instance_count(self._meshes_available.selected_value,meshes)
-        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material,
-                                       add_downsampled_copy_for_fast_rendering=True)
+        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
@@ -1059,9 +1034,9 @@ class AppWindow:
             self._scene.scene.add_geometry("__model__", geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
-            center = np.array([0,0,0])
-            eye = center + np.array([-0.5, 0, 1])
-            up = np.array([0, 0, 1])
+            center = np.array([0, 0, 0])
+            eye = center + np.array([0, 0, -0.5])
+            up = np.array([0, -1, 0])
             self._scene.look_at(center, eye, up)
 
             self._annotation_scene = AnnotationScene(scene_num, geometry)
@@ -1082,7 +1057,7 @@ class AppWindow:
                     obj_geometry = o3d.io.read_point_cloud(
                         os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
                     #obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points))  # convert meter to mm
-                    model_name = model_names[int(obj['obj_id'])]
+                    model_name = model_names[int(obj['obj_id'])-1]
                     obj_name = model_name + '_' + self._obj_instance_count(model_name,active_meshes)
                     translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000  # convert to meter
                     orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
@@ -1121,8 +1096,8 @@ class AppWindow:
         path = self.scenes.objects_path + '/models_names.json'
         if os.path.exists(path):
             with open(path) as f:
-                model_names = json.load(path)
-                model_names = [model_names[x]['name'] for x in model_names]
+                data = json.load(f)
+                model_names = [data[x]['name'] for x in data]
         else: # model names file doesn't exist
             warnings.warn("models_names.json doesn't exist. Objects will be loaded with their literal id (obj_000001, obj_000002, ...)")
             no_of_models = len([os.path.basename(x)[:-4] for x in glob.glob(self.scenes.objects_path + '/*.ply')])
