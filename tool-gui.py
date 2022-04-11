@@ -7,18 +7,15 @@ import open3d.visualization.rendering as rendering
 import os
 import platform
 import json
-import cv2
-from tf.transformations import quaternion_matrix
 import argparse
+import cv2
+import warnings
 
 isMacOS = (platform.system() == "Darwin")
 
 left_shift_modifier = False
 dist = 0.002
 deg = 1
-
-global cloud_path
-
 
 class Scenes:
     def __init__(self, dataset_path, dataset_split):
@@ -722,25 +719,6 @@ class AppWindow:
     def _on_generate(self):
         global cloud_path
 
-        # TODO add this to a json file
-        obj_mask_value = {
-            # our objects
-            'choco_box': 20,
-            'corn_can': 40,
-            'HDMI_cable': 60,
-            'krauter_sauce': 80,
-            'pantene_shampoo': 100,
-            'white_candle': 120,
-            'barilla_spaghetti': 255,
-            # YCB like
-            'cereal_box': 140,
-            'scheuermilch': 160,
-            'scissors': 180,
-            'tomato_can': 200,
-            'waschesteife': 220,
-            'red_bowl': 240,
-        }
-
         with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
             model_names = json.load(model_names_json)
             model_ids = {y['name']: x for x, y in model_names.items()}
@@ -780,125 +758,6 @@ class AppWindow:
                 gt_6d_pose_data[str(view)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
 
-        depth_k = np.array([[1778.81005859375, 0.0, 967.9315795898438], [0.0, 1778.870361328125, 572.4088134765625], [0.0, 0.0, 1.0]])  # for Zivid Two camera
-
-        scene_camera_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_camera.json")
-        # generate "scene_camera.json"
-        with open(scene_camera_path, 'w+') as scene_camera:
-            scene_camera_date = {}
-            for view in range(num_of_views):
-                scene_camera_date[str(view)] = {"cam_K": list(depth_k.flatten()), "depth_scale": 1.0}
-                # TODO change depth scale if changed during collection
-            json.dump(scene_camera_date, scene_camera)
-
-        # write cloud segmentation annotation - set of points for each object instance
-        # TODO generate annotations for other scene clouds
-        cloud_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'cloud_annotation')
-        if not os.path.exists(cloud_annotation_path):
-            os.makedirs(cloud_annotation_path)
-        json_cloud_annotation_path = os.path.join(cloud_annotation_path, 'assembled_cloud.json')
-        cloud = o3d.io.read_point_cloud(cloud_path)
-        cloud_annotation_data = list()
-        with open(json_cloud_annotation_path, 'w+') as f:
-            for scene_obj in self._annotation_scene.get_objects():
-                # find nearest points for each object and save mask
-                obj = scene_obj.obj_geometry
-                scene = cloud
-                pcd_tree = o3d.geometry.KDTreeFlann(scene)
-                seg_points = np.zeros(len(scene.points), dtype=bool)
-                for point in obj.points:
-                    [k, idx, _] = pcd_tree.search_radius_vector_3d(point, 0.005)
-                    np.asarray(scene.colors)[idx[1:], :] = [0, 1, 0]  # Debug
-                    seg_points[idx[1:]] = True
-                #o3d.visualization.draw_geometries([scene])  # Debug
-                seg_idx = np.where(seg_points == True)[0]
-                obj_data = {"type": str(scene_obj.obj_name[:-2]),
-                            #"instance": str(scene_obj.obj_name[-1]),
-                            "point_indices": list(map(str, seg_idx))
-                            }
-                cloud_annotation_data.append(obj_data)
-            json.dump(cloud_annotation_data, f)
-
-            # generate segmented image
-
-            image_annotation_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "mask_all")
-            if not os.path.exists(image_annotation_path):
-                os.makedirs(image_annotation_path)
-            for count in range(num_of_views):
-                tvec = trans_data[str(count)][2]['translation'] # 3rd tranformation is zivid camera to scene link (bin or table)
-                tvec = np.array([tvec['x'], tvec['y'], tvec['z']], np.float64)
-
-                rvec = trans_data[str(count)][2]['rotation_quaternion']
-                rvec = np.array([rvec['x'], rvec['y'], rvec['z'], rvec['w']], np.float64)
-                matrix = quaternion_matrix(rvec)
-                matrix = matrix[:3,:3]
-                rvec = cv2.Rodrigues(matrix)
-                rvec = rvec[0]
-
-                seg_mask = np.zeros((1200, 1944))
-
-                # sort object from closer to farthest so masks occlusion would be generated correctly
-                dist_to_centers = list()
-                cam_pose = trans_data[str(count)][0]['translation'] # 1st tranformation is  iiwa_link to camera
-                cam_pose= np.array([cam_pose['x'], cam_pose['y'], cam_pose['z']], np.float64)
-                scene_center = trans_data[str(count)][1]['translation'] # 2nd tranformation is iiwa_link to scene
-                scene_center = np.array([scene_center['x'], scene_center['y'], scene_center['z']], np.float64)
-                #pcd_tree = o3d.geometry.KDTreeFlann(cloud)
-                for obj in self._annotation_scene.get_objects():
-                    object_center = obj.obj_geometry.get_center() + scene_center
-                    dist = np.linalg.norm(cam_pose - object_center)
-                    #[k, idx, _] = pcd_tree.search_knn_vector_3d(cam_pose, 1)
-                    #nearest_point = np.asarray(cloud.points)[idx[0]]
-                    #dist = np.linalg.norm(cam_pose - nearest_point)
-                    dist_to_centers.append(dist)
-                sort_index = np.flip(np.argsort(np.array(dist_to_centers)))
-
-                obj_count = 0 # TODO make a json file for all objects and add mask pixel value for all of them
-                obj_list = self._annotation_scene.get_objects()
-                for obj_count in range(len(obj_list)):
-                    obj = obj_list[sort_index[obj_count]]
-                    project_points = np.array(obj.obj_geometry.points)
-                    points_indices = cv2.projectPoints(project_points, rvec, tvec, depth_k, None)
-                    points_indices = points_indices[0]
-                    points_indices = np.around(points_indices)
-                    points_indices = points_indices.astype(np.uint16)
-                    obj_mask = np.zeros((1200, 1944), dtype=np.uint8)
-                    for index in range(project_points.shape[0]):
-                        point = (points_indices[index][0][1], points_indices[index][0][0])
-                        try:
-                            obj_mask[point] = 255
-                        except:
-                            pass # TODO print warning
-
-                    # fill gaps in mask
-                    closing =  obj_mask
-                    kernel = np.ones((2, 2), np.uint8)
-                    closing = cv2.morphologyEx(obj_mask, cv2.MORPH_CLOSE, kernel)
-                    closing = cv2.dilate(obj_mask, kernel, iterations=1)
-
-                    #cv2.imshow('closing', closing)
-                    #cv2.waitKey()
-                    #cv2.destroyAllWindows()
-
-                    # Find contours
-                    cnts = cv2.findContours(closing, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-                    cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-                    c = max(cnts, key=cv2.contourArea)
-
-                    pixel_val = obj_mask_value[obj.obj_name[:-2]]
-                    #cv2.fillPoly(closing, pts=[c], color=pixel_val)
-                    cv2.fillPoly(seg_mask, pts=[c], color=pixel_val)
-
-                    #closing[closing==255] = 0 # remove all pixels not in main contour
-
-                    #seg_mask = np.maximum(closing, seg_mask) # merge current object to over all object
-
-                    obj_count += 1
-
-                #cv2.imshow("seg mask", seg_mask)
-                #cv2.waitKey(0)
-                #cv2.destroyAllWindows()
-                cv2.imwrite(os.path.join(image_annotation_path, f"{count:06}" + ".png"), seg_mask)
 
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
@@ -1149,30 +1008,52 @@ class AppWindow:
         meshes = [i.obj_name for i in meshes]
         self._meshes_used.set_items(meshes)
 
+    def _make_point_cloud(self, rgb_img, depth_img, cam_K):
+        # convert images to open3d types
+        rgb_img_o3d = o3d.geometry.Image(cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB))
+        depth_img_o3d = o3d.geometry.Image(depth_img)
+
+        # convert image to point cloud
+        intrinsic = o3d.camera.PinholeCameraIntrinsic(rgb_img.shape[0], rgb_img.shape[1],
+                                                      cam_K[0, 0], cam_K[1, 1], cam_K[0, 2], cam_K[1, 2])
+        rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_img_o3d, depth_img_o3d,
+                                                                  depth_scale=1, convert_rgb_to_intensity=False)
+        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
+
+        return pcd
+
     def scene_load(self, scenes_path, scene_num):
-        global cloud_path
-        cloud_path = os.path.join(scenes_path, f"{scene_num:06}", 'cloud/assembled_cloud.pcd')
+        # TODO implement sample number and view number
+        view_num = 0
 
         self._scene.scene.clear_geometry()
-
         geometry = None
-        cloud = None
+
+        path = os.path.join(scenes_path, f'{scene_num:06}')
+        rgb_path = os.path.join(path, 'rgb', f'{view_num:06}'+'.png')
+        rgb_img = cv2.imread(rgb_path)
+        depth_path = os.path.join(path, 'depth', f'{view_num:06}'+ '.png')
+        depth_img = cv2.imread(depth_path, -1)
+        depth_img = np.float32(depth_img/1000)
+
+        camera_params_path = os.path.join(path, 'scene_camera.json')
+        with open(camera_params_path) as f:
+            data = json.load(f)
+            cam_K = data[str(view_num)]['cam_K']
+            cam_K = np.array(cam_K).reshape((3,3))
 
         try:
-            cloud = o3d.io.read_point_cloud(cloud_path)
-            # TODO downsample at the visualizer loading and delete it here
-            cloud = cloud.voxel_down_sample(0.001) # downsample assembled cloud to make gui faster
-
+            geometry = self._make_point_cloud(rgb_img, depth_img, cam_K)
         except Exception:
-            pass
-        if cloud is not None:
-            print("[Info] Successfully read", cloud_path)
-            if not cloud.has_normals():
-                cloud.estimate_normals()
-            cloud.normalize_normals()
-            geometry = cloud
+            print("Failed to load scene.")
+
+        if geometry is not None:
+            print("[Info] Successfully read scene ", scene_num)
+            if not geometry.has_normals():
+                geometry.estimate_normals()
+            geometry.normalize_normals()
         else:
-            print("[WARNING] Failed to read points", cloud_path)
+            print("[WARNING] Failed to read points")
 
         try:
             self._scene.scene.add_geometry("__model__", geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
@@ -1187,53 +1068,32 @@ class AppWindow:
             self._meshes_used.set_items([])  # clear list from last loaded scene
 
             # load values if an annotation already exists
-            # TODO this should load the first view angle only
-            with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
-                model_names = json.load(model_names_json)
-            with open(os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'scene_transformations.json')) as transformations:
-                trans_data = json.load(transformations)
+
+            model_names = self.load_model_names()
+
             scene_gt_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", 'scene_gt.json')
             # if os.path.exists(json_path):
             with open(scene_gt_path) as scene_gt_file:
                 data = json.load(scene_gt_file)
                 scene_data = data["0"] # scene is always loaded with annotations from scene 0
-                obj_list = list()
                 active_meshes = list()
                 for obj in scene_data:
                     # add object to annotation_scene object
                     obj_geometry = o3d.io.read_point_cloud(
                         os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
-                    obj_geometry.points = o3d.utility.Vector3dVector(
-                        np.array(obj_geometry.points) / 1000)  # convert meter to mm
-                    model_name = model_names[str(obj['obj_id'])]['name']
+                    #obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points))  # convert meter to mm
+                    model_name = model_names[int(obj['obj_id'])]
                     obj_name = model_name + '_' + self._obj_instance_count(model_name,active_meshes)
                     translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000  # convert to meter
                     orientation = np.array(np.array(obj['cam_R_m2c']), dtype=np.float64)
                     transform = np.concatenate((orientation.reshape((3,3)), translation.reshape(3, 1)), axis=1)
                     transform_cam_to_obj = np.concatenate((transform, np.array([0, 0, 0, 1]).reshape(1, 4)))  # homogeneous transform
 
-                    # transform 6D pose from camera frame to scene frame
-                    assert trans_data["0"][2]['source_frame'] == 'zivid_optical_frame'
-                    assert trans_data["0"][2]['target_frame'] == 'scene_link'
-                    # transform object center to camera frame
-                    t = trans_data["0"][2]['translation']
-                    t = np.array([t['x'], t['y'], t['z']])
-                    quaternion = trans_data["0"][2]['rotation_quaternion']
-                    quaternion = np.array([quaternion['w'], quaternion['x'], quaternion['y'], quaternion['z']])
-                    R = o3d.geometry.get_rotation_matrix_from_quaternion(quaternion)
-                    transform_cam_to_scene = np.vstack((np.hstack((R, t[:, None])), [0, 0, 0, 1]))
-
-                    R_inv = np.transpose(R)
-                    t_inv = - np.matmul(np.transpose(R), t)
-                    transform_scene_to_cam = np.vstack((np.hstack((R_inv, t_inv[:, None])), [0, 0, 0, 1]))
-
-                    transform_scene_to_object = np.matmul(transform_scene_to_cam, transform_cam_to_obj)
-
-                    self._annotation_scene.add_obj(obj_geometry, obj_name, transform_scene_to_object)
+                    self._annotation_scene.add_obj(obj_geometry, obj_name, transform_cam_to_obj)
                     # adding object to the scene
-                    obj_geometry.translate(transform_scene_to_object[0:3,3])
+                    obj_geometry.translate(transform_cam_to_obj[0:3,3])
                     center = obj_geometry.get_center()
-                    obj_geometry.rotate(transform_scene_to_object[0:3, 0:3], center=center)
+                    obj_geometry.rotate(transform_cam_to_obj[0:3, 0:3], center=center)
                     self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
                     active_meshes.append(obj_name)
             self._meshes_used.set_items(active_meshes)
@@ -1254,14 +1114,22 @@ class AppWindow:
         self._scene.scene.scene.render_to_image(on_image)
 
     def update_obj_list(self):
-        with open(self.scenes.objects_path + '/models_names.json') as model_names_json:
-            model_names = json.load(model_names_json)
+        model_names = self.load_model_names()
+        self._meshes_available.set_items(model_names)
 
-        os.chdir(self.scenes.objects_path)
-        objects_list = glob.glob("*.ply")
-        objects_list = [x.split('.')[0] for x in objects_list]
-        objects_names = [model_names[str(int(x[4:]))]['name'] for x in objects_list]
-        self._meshes_available.set_items(objects_names)
+    def load_model_names(self):
+        path = self.scenes.objects_path + '/models_names.json'
+        if os.path.exists(path):
+            with open(path) as f:
+                model_names = json.load(path)
+                model_names = [model_names[x]['name'] for x in model_names]
+        else: # model names file doesn't exist
+            warnings.warn("models_names.json doesn't exist. Objects will be loaded with their literal id (obj_000001, obj_000002, ...)")
+            no_of_models = len([os.path.basename(x)[:-4] for x in glob.glob(self.scenes.objects_path + '/*.ply')])
+            model_names = ['obj_' + f'{i+1:06}' for i in range(no_of_models)]
+
+        return model_names
+
 
     def _on_next_scene(self):
         # TODO handle overflow
