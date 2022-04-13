@@ -183,19 +183,19 @@ class AppWindow:
         self._samples_buttons_label = gui.Label("Samples:")
         self._images_buttons_label = gui.Label("Images:  ")
 
-        self._pre_sample_button = gui.Button("Previous s")
+        self._pre_sample_button = gui.Button("Previous")
         self._pre_sample_button.horizontal_padding_em = 0.8
         self._pre_sample_button.vertical_padding_em = 0
         self._pre_sample_button.set_on_clicked(self._on_previous_scene)
-        self._next_sample_button = gui.Button("Next s")
+        self._next_sample_button = gui.Button("Next")
         self._next_sample_button.horizontal_padding_em = 0.8
         self._next_sample_button.vertical_padding_em = 0
         self._next_sample_button.set_on_clicked(self._on_next_scene)
-        self._pre_image_button = gui.Button("Previous s")
+        self._pre_image_button = gui.Button("Previous")
         self._pre_image_button.horizontal_padding_em = 0.8
         self._pre_image_button.vertical_padding_em = 0
         self._pre_image_button.set_on_clicked(self._on_previous_image)
-        self._next_image_button = gui.Button("Next s")
+        self._next_image_button = gui.Button("Next")
         self._next_image_button.horizontal_padding_em = 0.8
         self._next_image_button.vertical_padding_em = 0
         self._next_image_button.set_on_clicked(self._on_next_image)
@@ -271,7 +271,7 @@ class AppWindow:
 
         # if no active_mesh selected print error
         if self._meshes_used.selected_index == -1:
-            self._on_empty_active_meshes()
+            self._on_error("No objects are highlighted in scene meshes")
             return gui.Widget.EventCallbackResult.HANDLED
 
         def move(x, y, z, rx, ry, rz):
@@ -345,7 +345,7 @@ class AppWindow:
     def _on_refine(self):
         # if no active_mesh selected print error
         if self._meshes_used.selected_index == -1:
-            self._on_empty_active_meshes()
+            self._on_error("No objects are highlighted in scene meshes")
             return gui.Widget.EventCallbackResult.HANDLED
 
         target = self._annotation_scene.bin_scene
@@ -394,12 +394,12 @@ class AppWindow:
             gt_6d_pose_data[str(image_num)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
 
-    def _on_empty_active_meshes(self):
+    def _on_error(self, err_msg):
         dlg = gui.Dialog("Error")
 
         em = self.window.theme.font_size
         dlg_layout = gui.Vert(em, gui.Margins(em, em, em, em))
-        dlg_layout.add_child(gui.Label("No objects are highlighted in scene meshes"))
+        dlg_layout.add_child(gui.Label(err_msg))
 
         ok = gui.Button("OK")
         ok.set_on_clicked(self._on_about_ok)
@@ -412,9 +412,6 @@ class AppWindow:
 
         dlg.add_child(dlg_layout)
         self.window.show_dialog(dlg)
-
-    def _on_empty_active_meshes_ok(self):
-        self.window.close_dialog()
 
     def _on_show_axes(self, show):
         self.settings.show_axes = show
@@ -611,15 +608,28 @@ class AppWindow:
         return model_names
 
     def _on_next_scene(self):
-        # TODO handle overflow
-        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num + 1)
+        if self._annotation_scene.scene_num + 1 > len(next(os.walk(self.scenes.scenes_path))[1]):
+            self._on_error("There is no next scene.")
+            return
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num + 1, 0) # open next scene on the first image
 
     def _on_previous_scene(self):
-        # TODO handle underflow
-        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num - 1)
+        if self._annotation_scene.scene_num - 1 < 1:
+            self._on_error("There is no scene number before scene 1.")
+            return
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num - 1, 0) # open next scene on the first image
 
-    def save_annotation(self):
-        pass
+    def _on_next_image(self):
+        if self._annotation_scene.image_num + 1 > len(next(os.walk(os.path.join(self.scenes.scenes_path, f'{self._annotation_scene.scene_num:06}')))[1]):
+            self._on_error("There is no next image.")
+            return
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num, self._annotation_scene.image_num + 1)
+
+    def _on_previous_image(self):
+        if self._annotation_scene.image_num - 1 < 0:
+            self._on_error("There is no image number before image 0.")
+            return
+        self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num, self._annotation_scene.image_num - 1)
 
 
 def main():
