@@ -14,6 +14,7 @@ left_shift_modifier = False
 dist = 0.002
 deg = 1
 
+
 class Scenes:
     def __init__(self, dataset_path, dataset_split):
         self.scenes_path = os.path.join(dataset_path, dataset_split)
@@ -21,9 +22,10 @@ class Scenes:
 
 
 class AnnotationScene:
-    def __init__(self, scene_num, bin_scene):
-        self.bin_scene = bin_scene
+    def __init__(self, scene_point_cloud, scene_num, image_num):
+        self.bin_scene = scene_point_cloud
         self.scene_num = scene_num
+        self.image_num = image_num
 
         self.obj_list = list()
 
@@ -57,9 +59,6 @@ class Settings:
         self._materials[Settings.UNLIT].base_color = [0.9, 0.9, 0.9, 1.0]
         self._materials[Settings.UNLIT].shader = Settings.UNLIT
 
-        # Conveniently, assigning from self._materials[...] assigns a reference,
-        # not a copy, so if we change the property of a material, then switch
-        # to another one, then come back, the old setting will still be there.
         self.material = self._materials[Settings.UNLIT]
 
 class AppWindow:
@@ -90,9 +89,6 @@ class AppWindow:
         self._point_size.double_value = self.settings.material.point_size
 
     def _on_layout(self, layout_context):
-        # The on_layout callback should set the frame (position + size) of every
-        # child correctly. After the callback is done the window will layout
-        # the grandchildren.
         r = self.window.content_rect
         self._scene.frame = r
         width = 17 * layout_context.theme.font_size
@@ -116,29 +112,12 @@ class AppWindow:
         self._scene.scene = rendering.Open3DScene(w.renderer)
 
         # ---- Settings panel ----
-        # Rather than specifying sizes in pixels, which may vary in size based
-        # on the monitor, especially on macOS which has 220 dpi monitors, use
-        # the em-size. This way sizings will be proportional to the font size,
-        # which will create a more visually consistent size across platforms.
         em = w.theme.font_size
         separation_height = int(round(0.5 * em))
 
-        # Widgets are laid out in layouts: gui.Horiz, gui.Vert,
-        # gui.CollapsableVert, and gui.VGrid. By nesting the layouts we can
-        # achieve complex designs. Usually we use a vertical layout as the
-        # topmost widget, since widgets tend to be organized from top to bottom.
-        # Within that, we usually have a series of horizontal layouts for each
-        # row. All layouts take a spacing parameter, which is the spacing
-        # between items in the widget, and a margins parameter, which specifies
-        # the spacing of the left, top, right, bottom margins. (This acts like
-        # the 'padding' property in CSS.)
         self._settings_panel = gui.Vert(
             0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
 
-        # Create a collapsable vertical widget, which takes up enough vertical
-        # space for all its children when open, but only enough for text when
-        # closed. This is useful for property pages, so the user can hide sets
-        # of properties they rarely use.
         view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
                                          gui.Margins(em, 0, 0, 0))
         view_ctrls.set_is_open(True)
@@ -156,7 +135,7 @@ class AppWindow:
         material_settings.set_is_open(True)
 
         self._point_size = gui.Slider(gui.Slider.INT)
-        self._point_size.set_limits(1, 10)
+        self._point_size.set_limits(1, 5)
         self._point_size.set_on_value_changed(self._on_point_size)
 
         grid = gui.VGrid(2, 0.25 * em)
@@ -168,13 +147,6 @@ class AppWindow:
         self._settings_panel.add_child(material_settings)
         # ----
 
-        # Normally our user interface can be children of all one layout (usually
-        # a vertical layout), which is then the only child of the window. In our
-        # case we want the scene to take up all the space and the settings panel
-        # to go above it. We can do this custom layout by providing an on_layout
-        # callback. The on_layout callback should set the frame
-        # (position + size) of every child correctly. After the callback is
-        # done the window will layout the grandchildren.
         w.set_on_layout(self._on_layout)
         w.add_child(self._scene)
         w.add_child(self._settings_panel)
@@ -200,48 +172,71 @@ class AppWindow:
         scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
                                             gui.Margins(em, 0, 0, 0))
         scene_control.set_is_open(True)
-        pre_button = gui.Button("Previous")
-        next_button = gui.Button("Next")
-        pre_button.set_on_clicked(self._on_previous_scene)
-        next_button.set_on_clicked(self._on_next_scene)
+
         generate_save_annotation = gui.Button("generate annotation - save/update")
         generate_save_annotation.set_on_clicked(self._on_generate)
         refine_position = gui.Button("Refine position")
         refine_position.set_on_clicked(self._on_refine)
         scene_control.add_child(generate_save_annotation)
         scene_control.add_child(refine_position)
-        scene_control.add_child(pre_button)
-        scene_control.add_child(next_button)
+
+        self._samples_buttons_label = gui.Label("Samples:")
+        self._images_buttons_label = gui.Label("Images:  ")
+
+        self._pre_sample_button = gui.Button("Previous s")
+        self._pre_sample_button.horizontal_padding_em = 0.8
+        self._pre_sample_button.vertical_padding_em = 0
+        self._pre_sample_button.set_on_clicked(self._on_previous_scene)
+        self._next_sample_button = gui.Button("Next s")
+        self._next_sample_button.horizontal_padding_em = 0.8
+        self._next_sample_button.vertical_padding_em = 0
+        self._next_sample_button.set_on_clicked(self._on_next_scene)
+        self._pre_image_button = gui.Button("Previous s")
+        self._pre_image_button.horizontal_padding_em = 0.8
+        self._pre_image_button.vertical_padding_em = 0
+        self._pre_image_button.set_on_clicked(self._on_previous_image)
+        self._next_image_button = gui.Button("Next s")
+        self._next_image_button.horizontal_padding_em = 0.8
+        self._next_image_button.vertical_padding_em = 0
+        self._next_image_button.set_on_clicked(self._on_next_image)
+        # 2 rows for sample and scene control
+        h = gui.Horiz(0.4 * em)  # row 1
+        h.add_stretch()
+        h.add_child(self._samples_buttons_label)
+        h.add_child(self._pre_sample_button)
+        h.add_child(self._next_sample_button)
+        h.add_stretch()
+        scene_control.add_child(h)
+        h = gui.Horiz(0.4 * em)  # row 2
+        h.add_stretch()
+        h.add_child(self._images_buttons_label)
+        h.add_child(self._pre_image_button)
+        h.add_child(self._next_image_button)
+        h.add_stretch()
+        scene_control.add_child(h)
+
         self._settings_panel.add_child(scene_control)
 
         # ---- Menu ----
-        # The menu is global (because the macOS menu is global), so only create
-        # it once, no matter how many windows are created
         if gui.Application.instance.menubar is None:
             file_menu = gui.Menu()
             file_menu.add_separator()
             file_menu.add_item("Quit", AppWindow.MENU_QUIT)
             settings_menu = gui.Menu()
-            settings_menu.add_item("Control Toolbar",
-                                   AppWindow.MENU_SHOW_SETTINGS)
             settings_menu.set_checked(AppWindow.MENU_SHOW_SETTINGS, True)
             help_menu = gui.Menu()
             help_menu.add_item("About", AppWindow.MENU_ABOUT)
 
             menu = gui.Menu()
             menu.add_menu("File", file_menu)
-            menu.add_menu("Settings", settings_menu)
             menu.add_menu("Help", help_menu)
             gui.Application.instance.menubar = menu
 
-        # The menubar is global, but we need to connect the menu items to the
-        # window, so that the window can call the appropriate function when the
-        # menu item is activated.
-        # w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
         w.set_on_menu_item_activated(AppWindow.MENU_QUIT, self._on_menu_quit)
         w.set_on_menu_item_activated(AppWindow.MENU_ABOUT, self._on_menu_about)
         # ----
 
+        # ---- annotation tool settings ----
         self._on_point_size(1) # set default size to 1
 
         self._apply_settings()
@@ -252,7 +247,6 @@ class AppWindow:
         self._scene.set_on_key(self._transform)
 
     def _transform(self, event):
-        # TODO pressing the keys too fast still causes problems, is that render process that slow
         if event.is_repeat:
             return gui.Widget.EventCallbackResult.HANDLED
 
@@ -375,14 +369,16 @@ class AppWindow:
         active_obj.transform = np.matmul(reg.transformation, active_obj.transform)
 
     def _on_generate(self):
-        view = 0  # TODO: change when sample number and scene number are implemented
+        image_num = self._annotation_scene.image_num
         model_names = self.load_model_names()
 
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
 
+        with open(json_6d_path, "r") as gt_scene:
+            gt_6d_pose_data = json.load(gt_scene)
+
         # generate "scene_gt.json": write 6D annotation for each object in all view angles
         with open(json_6d_path, 'w+') as gt_scene:
-            gt_6d_pose_data = {}
             view_angle_data = list()
             for obj in self._annotation_scene.get_objects():
                 transform_cam_to_object = obj.transform
@@ -395,7 +391,7 @@ class AppWindow:
                             "obj_id": obj_id  # TODO add id instead of name
                            }
                 view_angle_data.append(obj_data)
-            gt_6d_pose_data[str(view)] = view_angle_data
+            gt_6d_pose_data[str(image_num)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
 
     def _on_empty_active_meshes(self):
@@ -520,24 +516,22 @@ class AppWindow:
 
         return pcd
 
-    def scene_load(self, scenes_path, scene_num):
-        # TODO implement sample number and view number
-        view_num = 0
+    def scene_load(self, scenes_path, scene_num, image_num):
 
         self._scene.scene.clear_geometry()
         geometry = None
 
-        path = os.path.join(scenes_path, f'{scene_num:06}')
-        rgb_path = os.path.join(path, 'rgb', f'{view_num:06}'+'.png')
+        scene_path = os.path.join(scenes_path, f'{scene_num:06}')
+        rgb_path = os.path.join(scene_path, 'rgb', f'{image_num:06}'+'.png')
         rgb_img = cv2.imread(rgb_path)
-        depth_path = os.path.join(path, 'depth', f'{view_num:06}'+ '.png')
+        depth_path = os.path.join(scene_path, 'depth', f'{image_num:06}'+ '.png')
         depth_img = cv2.imread(depth_path, -1)
         depth_img = np.float32(depth_img/1000)
 
-        camera_params_path = os.path.join(path, 'scene_camera.json')
+        camera_params_path = os.path.join(scene_path, 'scene_camera.json')
         with open(camera_params_path) as f:
             data = json.load(f)
-            cam_K = data[str(view_num)]['cam_K']
+            cam_K = data[str(image_num)]['cam_K']
             cam_K = np.array(cam_K).reshape((3,3))
 
         try:
@@ -562,7 +556,7 @@ class AppWindow:
             up = np.array([0, -1, 0])
             self._scene.look_at(center, eye, up)
 
-            self._annotation_scene = AnnotationScene(scene_num, geometry)
+            self._annotation_scene = AnnotationScene(geometry, scene_num, image_num)
             self._meshes_used.set_items([])  # clear list from last loaded scene
 
             # load values if an annotation already exists
@@ -573,7 +567,7 @@ class AppWindow:
             # if os.path.exists(json_path):
             with open(scene_gt_path) as scene_gt_file:
                 data = json.load(scene_gt_file)
-                scene_data = data["0"] # scene is always loaded with annotations from scene 0
+                scene_data = data[str(image_num)]
                 active_meshes = list()
                 for obj in scene_data:
                     # add object to annotation_scene object
@@ -641,7 +635,7 @@ def main():
     w = AppWindow(2048, 1536, scenes)
 
     if os.path.exists(scenes.scenes_path) and os.path.exists(scenes.objects_path):
-        w.scene_load(scenes.scenes_path, args.start_scene_num)
+        w.scene_load(scenes.scenes_path, args.start_scene_num, args.start_image_num)
         w.update_obj_list()
     else:
         w.window.show_message_box("Error",
