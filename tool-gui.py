@@ -649,43 +649,43 @@ class AppWindow:
             # Translation
             if not left_shift_modifier:
                 if event.key == gui.KeyName.L:
-                    print("j pressed: translate in +ve X direction")
+                    print("L pressed: translate in +ve X direction")
                     move(dist, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.H:
-                    print("k pressed: translate in -ve X direction")
+                    print("H pressed: translate in -ve X direction")
                     move(-dist, 0, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.COMMA:
-                    print("h pressed: translate in +ve Y direction")
+                    print("Comma pressed: translate in +ve Y direction")
                     move(0, dist, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.I:
-                    print("l pressed: translate in -ve Y direction")
+                    print("I pressed: translate in -ve Y direction")
                     move(0, -dist, 0, 0, 0, 0)
                 elif event.key == gui.KeyName.K:
-                    print("i pressed: translate in +ve Z direction")
+                    print("K pressed: translate in +ve Z direction")
                     move(0, 0, dist, 0, 0, 0)
                 elif event.key == gui.KeyName.J:
-                    print(", pressed: translate in -ve Z direction")
+                    print("J pressed: translate in -ve Z direction")
                     move(0, 0, -dist, 0, 0, 0)
             # Rotation - keystrokes are not in same order as translation to make movement more human intuitive
             else:
                 print("Left-Shift is clicked; rotation mode")
                 if event.key == gui.KeyName.L:
-                    print("j pressed: rotate around +ve X direction")
-                    move(0, 0, 0, 0, deg * np.pi / 180, 0)
-                elif event.key == gui.KeyName.H:
-                    print("k pressed: rotate around -ve X direction")
-                    move(0, 0, 0, 0, -deg * np.pi / 180, 0)
-                elif event.key == gui.KeyName.K:
-                    print("h pressed: rotate around +ve Y direction")
+                    print("L pressed: rotate around +ve X direction")
                     move(0, 0, 0, 0, 0, deg * np.pi / 180)
-                elif event.key == gui.KeyName.J:
-                    print("l pressed: rotate around -ve Y direction")
+                elif event.key == gui.KeyName.H:
+                    print("H pressed: rotate around -ve X direction")
                     move(0, 0, 0, 0, 0, -deg * np.pi / 180)
+                elif event.key == gui.KeyName.K:
+                    print("K pressed: rotate around +ve Y direction")
+                    move(0, 0, 0, 0, deg * np.pi / 180, 0)
+                elif event.key == gui.KeyName.J:
+                    print("J pressed: rotate around -ve Y direction")
+                    move(0, 0, 0, 0, -deg * np.pi / 180, 0)
                 elif event.key == gui.KeyName.COMMA:
-                    print("i pressed: rotate around +ve Z direction")
+                    print("Comma pressed: rotate around +ve Z direction")
                     move(0, 0, 0, deg * np.pi / 180, 0, 0)
                 elif event.key == gui.KeyName.I:
-                    print(", pressed: rotate around -ve Z direction")
+                    print("I pressed: rotate around -ve Z direction")
                     move(0, 0, 0, -deg * np.pi / 180, 0, 0)
 
         return gui.Widget.EventCallbackResult.HANDLED
@@ -1056,7 +1056,7 @@ class AppWindow:
                     # add object to annotation_scene object
                     obj_geometry = o3d.io.read_point_cloud(
                         os.path.join(self.scenes.objects_path, 'obj_' + f"{int(obj['obj_id']):06}" + '.ply'))
-                    #obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points))  # convert meter to mm
+                    obj_geometry.points = o3d.utility.Vector3dVector(np.array(obj_geometry.points) / 1000)  # convert mm to meter
                     model_name = model_names[int(obj['obj_id'])-1]
                     obj_name = model_name + '_' + self._obj_instance_count(model_name,active_meshes)
                     translation = np.array(np.array(obj['cam_t_m2c']), dtype=np.float64) / 1000  # convert to meter
