@@ -5,13 +5,10 @@ import open3d as o3d
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 import os
-import platform
 import json
 import argparse
 import cv2
 import warnings
-
-isMacOS = (platform.system() == "Darwin")
 
 left_shift_modifier = False
 dist = 0.002
@@ -50,13 +47,12 @@ class Settings:
     UNLIT = "defaultUnlit"
 
     def __init__(self):
-        self.mouse_model = gui.SceneWidget.Controls.ROTATE_CAMERA
         self.bg_color = gui.Color(1, 1, 1)
         self.show_axes = False
 
         self.apply_material = True  # clear to False after processing
         self._materials = {
-            Settings.UNLIT: rendering.MaterialRecord(),
+            Settings.UNLIT: rendering.MaterialRecord()
         }
         self._materials[Settings.UNLIT].base_color = [0.9, 0.9, 0.9, 1.0]
         self._materials[Settings.UNLIT].shader = Settings.UNLIT
@@ -66,30 +62,12 @@ class Settings:
         # to another one, then come back, the old setting will still be there.
         self.material = self._materials[Settings.UNLIT]
 
-    def set_material(self, name):
-        self.material = self._materials[name]
-        self.apply_material = True
-
-    def apply_material_prefab(self, name):
-        assert (self.material.shader == Settings.LIT)
-        prefab = Settings.PREFAB[name]
-        for key, val in prefab.items():
-            setattr(self.material, "base_" + key, val)
-
-    def apply_lighting_profile(self, name):
-        profile = Settings.LIGHTING_PROFILES[name]
-        for key, val in profile.items():
-            setattr(self, key, val)
-
-
 class AppWindow:
     MENU_OPEN = 1
     MENU_EXPORT = 2
     MENU_QUIT = 3
     MENU_SHOW_SETTINGS = 11
     MENU_ABOUT = 21
-
-    DEFAULT_IBL = "default"
 
     MATERIAL_NAMES = ["Unlit"]
     MATERIAL_SHADERS = [
@@ -103,20 +81,12 @@ class AppWindow:
         ]
         self._scene.scene.set_background(bg_color)
         self._scene.scene.show_axes(self.settings.show_axes)
-        if self.settings.new_ibl_name is not None:
-            self._scene.scene.scene.set_indirect_light(
-                self.settings.new_ibl_name)
-            # Clear new_ibl_name, so we don't keep reloading this image every
-            # time the settings are applied.
-            self.settings.new_ibl_name = None
 
         if self.settings.apply_material:
             self._scene.scene.update_material(self.settings.material)
             self.settings.apply_material = False
 
         self._show_axes.checked = self.settings.show_axes
-        c = gui.Color(self.settings.material.base_color[0])
-        self._material_color.color_value = c
         self._point_size.double_value = self.settings.material.point_size
 
     def _on_layout(self, layout_context):
@@ -136,8 +106,6 @@ class AppWindow:
     def __init__(self, width, height, scenes):
         self.scenes = scenes
         self.settings = Settings()
-        resource_path = gui.Application.instance.resource_path
-        self.settings.new_ibl_name = resource_path + "/" + AppWindow.DEFAULT_IBL
 
         self.window = gui.Application.instance.create_window(
             "BOP manual annotation tool", width, height)
@@ -185,13 +153,8 @@ class AppWindow:
 
         material_settings = gui.CollapsableVert("Material settings", 0,
                                                 gui.Margins(em, 0, 0, 0))
-        material_settings.set_is_open(False)
+        material_settings.set_is_open(True)
 
-        self._shader = gui.Combobox()
-        self._shader.add_item(AppWindow.MATERIAL_NAMES[0])
-        self._shader.set_on_selection_changed(self._on_shader)
-        self._material_color = gui.ColorEdit()
-        self._material_color.set_on_value_changed(self._on_material_color)
         self._point_size = gui.Slider(gui.Slider.INT)
         self._point_size.set_limits(1, 10)
         self._point_size.set_on_value_changed(self._on_point_size)
@@ -255,50 +218,27 @@ class AppWindow:
         # The menu is global (because the macOS menu is global), so only create
         # it once, no matter how many windows are created
         if gui.Application.instance.menubar is None:
-            if isMacOS:
-                app_menu = gui.Menu()
-                app_menu.add_item("About", AppWindow.MENU_ABOUT)
-                app_menu.add_separator()
-                app_menu.add_item("Quit", AppWindow.MENU_QUIT)
             file_menu = gui.Menu()
-            # file_menu.add_item("Open Annotation Folder", AppWindow.MENU_OPEN)
-            file_menu.add_item("Export Current Image...", AppWindow.MENU_EXPORT)
-            if not isMacOS:
-                file_menu.add_separator()
-                file_menu.add_item("Quit", AppWindow.MENU_QUIT)
+            file_menu.add_separator()
+            file_menu.add_item("Quit", AppWindow.MENU_QUIT)
             settings_menu = gui.Menu()
-            settings_menu.add_item("Lighting & Materials",
+            settings_menu.add_item("Control Toolbar",
                                    AppWindow.MENU_SHOW_SETTINGS)
             settings_menu.set_checked(AppWindow.MENU_SHOW_SETTINGS, True)
             help_menu = gui.Menu()
             help_menu.add_item("About", AppWindow.MENU_ABOUT)
 
             menu = gui.Menu()
-            if isMacOS:
-                # macOS will name the first menu item for the running application
-                # (in our case, probably "Python"), regardless of what we call
-                # it. This is the application menu, and it is where the
-                # About..., Preferences..., and Quit menu items typically go.
-                menu.add_menu("Example", app_menu)
-                menu.add_menu("File", file_menu)
-                menu.add_menu("Settings", settings_menu)
-                # Don't include help menu unless it has something more than
-                # About...
-            else:
-                menu.add_menu("File", file_menu)
-                menu.add_menu("Settings", settings_menu)
-                menu.add_menu("Help", help_menu)
+            menu.add_menu("File", file_menu)
+            menu.add_menu("Settings", settings_menu)
+            menu.add_menu("Help", help_menu)
             gui.Application.instance.menubar = menu
 
         # The menubar is global, but we need to connect the menu items to the
         # window, so that the window can call the appropriate function when the
         # menu item is activated.
         # w.set_on_menu_item_activated(AppWindow.MENU_OPEN, self._on_menu_open)
-        w.set_on_menu_item_activated(AppWindow.MENU_EXPORT,
-                                     self._on_menu_export)
         w.set_on_menu_item_activated(AppWindow.MENU_QUIT, self._on_menu_quit)
-        w.set_on_menu_item_activated(AppWindow.MENU_SHOW_SETTINGS,
-                                     self._on_menu_toggle_settings_panel)
         w.set_on_menu_item_activated(AppWindow.MENU_ABOUT, self._on_menu_about)
         # ----
 
@@ -458,7 +398,6 @@ class AppWindow:
             gt_6d_pose_data[str(view)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
 
-
     def _on_empty_active_meshes(self):
         dlg = gui.Dialog("Error")
 
@@ -481,86 +420,8 @@ class AppWindow:
     def _on_empty_active_meshes_ok(self):
         self.window.close_dialog()
 
-    def _set_mouse_mode_rotate(self):
-        self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_CAMERA)
-
-    def _set_mouse_mode_fly(self):
-        self._scene.set_view_controls(gui.SceneWidget.Controls.FLY)
-
-    def _set_mouse_mode_sun(self):
-        self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_SUN)
-
-    def _set_mouse_mode_ibl(self):
-        self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_IBL)
-
-    def _set_mouse_mode_model(self):
-        self._scene.set_view_controls(gui.SceneWidget.Controls.ROTATE_MODEL)
-
-    def _on_bg_color(self, new_color):
-        self.settings.bg_color = new_color
-        self._apply_settings()
-
-    def _on_show_skybox(self, show):
-        self.settings.show_skybox = show
-        self._apply_settings()
-
     def _on_show_axes(self, show):
         self.settings.show_axes = show
-        self._apply_settings()
-
-    def _on_use_ibl(self, use):
-        self.settings.use_ibl = use
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_use_sun(self, use):
-        self.settings.use_sun = use
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_lighting_profile(self, name, index):
-        if name != Settings.CUSTOM_PROFILE_NAME:
-            self.settings.apply_lighting_profile(name)
-            self._apply_settings()
-
-    def _on_new_ibl(self, name, index):
-        self.settings.new_ibl_name = gui.Application.instance.resource_path + "/" + name
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_ibl_intensity(self, intensity):
-        self.settings.ibl_intensity = int(intensity)
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_sun_intensity(self, intensity):
-        self.settings.sun_intensity = int(intensity)
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_sun_dir(self, sun_dir):
-        self.settings.sun_dir = sun_dir
-        self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
-        self._apply_settings()
-
-    def _on_sun_color(self, color):
-        self.settings.sun_color = color
-        self._apply_settings()
-
-    def _on_shader(self, name, index):
-        self.settings.set_material(AppWindow.MATERIAL_SHADERS[index])
-        self._apply_settings()
-
-    def _on_material_prefab(self, name, index):
-        self.settings.apply_material_prefab(name)
-        self.settings.apply_material = True
-        self._apply_settings()
-
-    def _on_material_color(self, color):
-        self.settings.material.base_color = [
-            color.red, color.green, color.blue, color.alpha
-        ]
-        self.settings.apply_material = True
         self._apply_settings()
 
     def _on_point_size(self, size):
@@ -568,64 +429,8 @@ class AppWindow:
         self.settings.apply_material = True
         self._apply_settings()
 
-    # def _on_menu_open(self):
-    #    dlg = gui.FileDialog(gui.FileDialog.OPEN, "Choose file to load",
-    #                         self.window.theme)
-    #    dlg.add_filter(
-    #        ".ply .stl .fbx .obj .off .gltf .glb",
-    #        "Triangle mesh files (.ply, .stl, .fbx, .obj, .off, "
-    #        ".gltf, .glb)")
-    #    dlg.add_filter(
-    #        ".xyz .xyzn .xyzrgb .ply .pcd .pts",
-    #        "Point cloud files (.xyz, .xyzn, .xyzrgb, .ply, "
-    #        ".pcd, .pts)")
-    #    dlg.add_filter(".ply", "Polygon files (.ply)")
-    #    dlg.add_filter(".stl", "Stereolithography files (.stl)")
-    #    dlg.add_filter(".fbx", "Autodesk Filmbox files (.fbx)")
-    #    dlg.add_filter(".obj", "Wavefront OBJ files (.obj)")
-    #    dlg.add_filter(".off", "Object file format (.off)")
-    #    dlg.add_filter(".gltf", "OpenGL transfer files (.gltf)")
-    #    dlg.add_filter(".glb", "OpenGL binary transfer files (.glb)")
-    #    dlg.add_filter(".xyz", "ASCII point cloud files (.xyz)")
-    #    dlg.add_filter(".xyzn", "ASCII point cloud with normals (.xyzn)")
-    #    dlg.add_filter(".xyzrgb",
-    #                   "ASCII point cloud files with colors (.xyzrgb)")
-    #    dlg.add_filter(".pcd", "Point Cloud Data files (.pcd)")
-    #    dlg.add_filter(".pts", "3D Points files (.pts)")
-    #    dlg.add_filter("", "All files")
-
-    #    # A file dialog MUST define on_cancel and on_done functions
-    #    dlg.set_on_cancel(self._on_file_dialog_cancel)
-    #    dlg.set_on_done(self._on_load_dialog_done)
-    #    self.window.show_dialog(dlg)
-
-    def _on_file_dialog_cancel(self):
-        self.window.close_dialog()
-
-    def _on_load_dialog_done(self, filename):
-        self.window.close_dialog()
-        self.load(filename)
-
-    def _on_menu_export(self):
-        dlg = gui.FileDialog(gui.FileDialog.SAVE, "Choose file to save",
-                             self.window.theme)
-        dlg.add_filter(".png", "PNG files (.png)")
-        dlg.set_on_cancel(self._on_file_dialog_cancel)
-        dlg.set_on_done(self._on_export_dialog_done)
-        self.window.show_dialog(dlg)
-
-    def _on_export_dialog_done(self, filename):
-        self.window.close_dialog()
-        frame = self._scene.frame
-        self.export_image(filename, frame.width, frame.height)
-
     def _on_menu_quit(self):
         gui.Application.instance.quit()
-
-    def _on_menu_toggle_settings_panel(self):
-        self._settings_panel.visible = not self._settings_panel.visible
-        gui.Application.instance.menubar.set_checked(
-            AppWindow.MENU_SHOW_SETTINGS, self._settings_panel.visible)
 
     def _on_menu_about(self):
         # Show a simple dialog. Although the Dialog is actually a widget, you can
@@ -636,7 +441,7 @@ class AppWindow:
 
         # Add the text
         dlg_layout = gui.Vert(em, gui.Margins(em, em, em, em))
-        dlg_layout.add_child(gui.Label("Open3D GUI Example"))
+        dlg_layout.add_child(gui.Label("BOP manual annotation tool"))
 
         # Add the Ok button. We need to define a callback function to handle
         # the click.
@@ -794,18 +599,6 @@ class AppWindow:
         except Exception as e:
             print(e)
 
-    def export_image(self, path, width, height):
-
-        def on_image(image):
-            img = image
-
-            quality = 9  # png
-            if path.endswith(".jpg"):
-                quality = 100
-            o3d.io.write_image(path, img, quality)
-
-        self._scene.scene.scene.render_to_image(on_image)
-
     def update_obj_list(self):
         model_names = self.load_model_names()
         self._meshes_available.set_items(model_names)
@@ -822,7 +615,6 @@ class AppWindow:
             model_names = ['obj_' + f'{i+1:06}' for i in range(no_of_models)]
 
         return model_names
-
 
     def _on_next_scene(self):
         # TODO handle overflow
