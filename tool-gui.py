@@ -669,7 +669,8 @@ def main():
     parser.add_argument("dataset-path", type=str, help="dataset path")
     parser.add_argument("dataset-split", type=str,
                         help="dataset split to load (train[_TRAINTYPE], val[_VALTYPE], test[_TESTTYPE])")
-    parser.add_argument("--start-scene_numb", type=int, help="Scene to start annotation from", default=0)
+    parser.add_argument("--start-scene_num", type=int, help="Scene to start annotation from", default=1)
+    parser.add_argument("--start-image_num", type=int, help="Scene to start annotation from", default=0)
     args = parser.parse_args()
 
     scenes = Dataset(args.dataset_path, args.dataset_split)
