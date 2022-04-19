@@ -15,7 +15,7 @@ dist = 0.002
 deg = 1
 
 
-class Scenes:
+class Dataset:
     def __init__(self, dataset_path, dataset_split):
         self.scenes_path = os.path.join(dataset_path, dataset_split)
         self.objects_path = os.path.join(dataset_path, 'models')
@@ -118,21 +118,13 @@ class AppWindow:
         self._settings_panel = gui.Vert(
             0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em))
 
-        view_ctrls = gui.CollapsableVert("View controls", 0.25 * em,
-                                         gui.Margins(em, 0, 0, 0))
+        view_ctrls = gui.CollapsableVert("View control", 0,
+                                                gui.Margins(em, 0, 0, 0))
         view_ctrls.set_is_open(True)
 
         self._show_axes = gui.Checkbox("Show axes")
         self._show_axes.set_on_checked(self._on_show_axes)
-        view_ctrls.add_fixed(separation_height)
         view_ctrls.add_child(self._show_axes)
-
-        self._settings_panel.add_fixed(separation_height)
-        self._settings_panel.add_child(view_ctrls)
-
-        material_settings = gui.CollapsableVert("Material settings", 0,
-                                                gui.Margins(em, 0, 0, 0))
-        material_settings.set_is_open(True)
 
         self._point_size = gui.Slider(gui.Slider.INT)
         self._point_size.set_limits(1, 5)
@@ -141,10 +133,9 @@ class AppWindow:
         grid = gui.VGrid(2, 0.25 * em)
         grid.add_child(gui.Label("Point size"))
         grid.add_child(self._point_size)
-        material_settings.add_child(grid)
+        view_ctrls.add_child(grid)
 
-        self._settings_panel.add_fixed(separation_height)
-        self._settings_panel.add_child(material_settings)
+        self._settings_panel.add_child(view_ctrls)
         # ----
 
         w.set_on_layout(self._on_layout)
@@ -677,7 +668,7 @@ def main():
     parser.add_argument("--start-scene_numb", type=int, help="Scene to start annotation from", default=0)
     args = parser.parse_args()
 
-    scenes = Scenes(args.dataset_path, args.dataset_split)
+    scenes = Dataset(args.dataset_path, args.dataset_split)
     gui.Application.instance.initialize()
     w = AppWindow(2048, 1536, scenes)
 
