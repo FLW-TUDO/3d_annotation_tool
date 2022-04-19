@@ -285,6 +285,8 @@ class AppWindow:
             return gui.Widget.EventCallbackResult.HANDLED
 
         def move(x, y, z, rx, ry, rz):
+            self._annotation_changed = True
+
             objects = self._annotation_scene.get_objects()
             active_obj = objects[self._meshes_used.selected_index]
             # translation or rotation
@@ -353,6 +355,8 @@ class AppWindow:
         return gui.Widget.EventCallbackResult.HANDLED
 
     def _on_refine(self):
+        self._annotation_changed = True
+
         # if no active_mesh selected print error
         if self._meshes_used.selected_index == -1:
             self._on_error("No objects are highlighted in scene meshes")
@@ -524,6 +528,7 @@ class AppWindow:
         return pcd
 
     def scene_load(self, scenes_path, scene_num, image_num):
+        self._annotation_changed = False
 
         self._scene.scene.clear_geometry()
         geometry = None
@@ -619,25 +624,45 @@ class AppWindow:
 
         return model_names
 
+    def _check_changes(self):
+        if self._annotation_changed:
+            self._on_error("Annotation changed but not saved. If you want to ignore the changes click the navigation button again.")
+            self._annotation_changed = False
+            return True
+        else:
+            return False
+
     def _on_next_scene(self):
+        if self._check_changes():
+            return
+
         if self._annotation_scene.scene_num + 1 > len(next(os.walk(self.scenes.scenes_path))[1]):
             self._on_error("There is no next scene.")
             return
         self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num + 1, 0) # open next scene on the first image
 
     def _on_previous_scene(self):
+        if self._check_changes():
+            return
+
         if self._annotation_scene.scene_num - 1 < 1:
             self._on_error("There is no scene number before scene 1.")
             return
         self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num - 1, 0) # open next scene on the first image
 
     def _on_next_image(self):
+        if self._check_changes():
+            return
+
         if self._annotation_scene.image_num + 1 > len(next(os.walk(os.path.join(self.scenes.scenes_path, f'{self._annotation_scene.scene_num:06}')))[1]):
             self._on_error("There is no next image.")
             return
         self.scene_load(self.scenes.scenes_path, self._annotation_scene.scene_num, self._annotation_scene.image_num + 1)
 
     def _on_previous_image(self):
+        if self._check_changes():
+            return
+
         if self._annotation_scene.image_num - 1 < 0:
             self._on_error("There is no image number before image 0.")
             return
