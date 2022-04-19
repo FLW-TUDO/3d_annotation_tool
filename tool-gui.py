@@ -169,28 +169,13 @@ class AppWindow:
         annotation_objects.add_child(remove_mesh_button)
         self._settings_panel.add_child(annotation_objects)
 
-        scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
+        self._scene_control = gui.CollapsableVert("Scene Control", 0.33 * em,
                                             gui.Margins(em, 0, 0, 0))
-        scene_control.set_is_open(True)
+        self._scene_control.set_is_open(True)
 
-        generate_save_annotation = gui.Button("generate annotation - save/update")
-        generate_save_annotation.set_on_clicked(self._on_generate)
-        refine_position = gui.Button("Refine position")
-        refine_position.set_on_clicked(self._on_refine)
-        scene_control.add_child(generate_save_annotation)
-        scene_control.add_child(refine_position)
+        self._images_buttons_label = gui.Label("Images:")
+        self._samples_buttons_label = gui.Label("Scene: ")
 
-        self._samples_buttons_label = gui.Label("Samples:")
-        self._images_buttons_label = gui.Label("Images:  ")
-
-        self._pre_sample_button = gui.Button("Previous")
-        self._pre_sample_button.horizontal_padding_em = 0.8
-        self._pre_sample_button.vertical_padding_em = 0
-        self._pre_sample_button.set_on_clicked(self._on_previous_scene)
-        self._next_sample_button = gui.Button("Next")
-        self._next_sample_button.horizontal_padding_em = 0.8
-        self._next_sample_button.vertical_padding_em = 0
-        self._next_sample_button.set_on_clicked(self._on_next_scene)
         self._pre_image_button = gui.Button("Previous")
         self._pre_image_button.horizontal_padding_em = 0.8
         self._pre_image_button.vertical_padding_em = 0
@@ -199,23 +184,44 @@ class AppWindow:
         self._next_image_button.horizontal_padding_em = 0.8
         self._next_image_button.vertical_padding_em = 0
         self._next_image_button.set_on_clicked(self._on_next_image)
+        self._pre_sample_button = gui.Button("Previous")
+        self._pre_sample_button.horizontal_padding_em = 0.8
+        self._pre_sample_button.vertical_padding_em = 0
+        self._pre_sample_button.set_on_clicked(self._on_previous_scene)
+        self._next_sample_button = gui.Button("Next")
+        self._next_sample_button.horizontal_padding_em = 0.8
+        self._next_sample_button.vertical_padding_em = 0
+        self._next_sample_button.set_on_clicked(self._on_next_scene)
         # 2 rows for sample and scene control
         h = gui.Horiz(0.4 * em)  # row 1
-        h.add_stretch()
-        h.add_child(self._samples_buttons_label)
-        h.add_child(self._pre_sample_button)
-        h.add_child(self._next_sample_button)
-        h.add_stretch()
-        scene_control.add_child(h)
-        h = gui.Horiz(0.4 * em)  # row 2
         h.add_stretch()
         h.add_child(self._images_buttons_label)
         h.add_child(self._pre_image_button)
         h.add_child(self._next_image_button)
         h.add_stretch()
-        scene_control.add_child(h)
+        self._scene_control.add_child(h)
+        h = gui.Horiz(0.4 * em)  # row 2
+        h.add_stretch()
+        h.add_child(self._samples_buttons_label)
+        h.add_child(self._pre_sample_button)
+        h.add_child(self._next_sample_button)
+        h.add_stretch()
+        self._scene_control.add_child(h)
 
-        self._settings_panel.add_child(scene_control)
+        self._view_numbers = gui.Horiz(0.4 * em)
+        self._image_number = gui.Label("Image: " + f'{0:06}')
+        self._scene_number = gui.Label("Scene: " + f'{0:06}')
+        self._view_numbers.add_child(self._image_number)
+        self._view_numbers.add_child(self._scene_number)
+        self._scene_control.add_child(self._view_numbers)
+
+        self._settings_panel.add_child(self._scene_control)
+        refine_position = gui.Button("Refine position")
+        refine_position.set_on_clicked(self._on_refine)
+        generate_save_annotation = gui.Button("generate annotation - save/update")
+        generate_save_annotation.set_on_clicked(self._on_generate)
+        self._scene_control.add_child(refine_position)
+        self._scene_control.add_child(generate_save_annotation)
 
         # ---- Menu ----
         if gui.Application.instance.menubar is None:
@@ -245,6 +251,10 @@ class AppWindow:
 
         # set callbacks for key control
         self._scene.set_on_key(self._transform)
+
+    def _update_scene_numbers(self):
+        self._scene_number.text = "Scene: " + f'{self._annotation_scene.scene_num:06}'
+        self._image_number.text = "Image: " + f'{self._annotation_scene.image_num:06}'
 
     def _transform(self, event):
         if event.is_repeat:
@@ -589,6 +599,8 @@ class AppWindow:
 
         except Exception as e:
             print(e)
+
+        self._update_scene_numbers()
 
     def update_obj_list(self):
         model_names = self.load_model_names()
