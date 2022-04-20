@@ -23,7 +23,7 @@ class Dataset:
 
 class AnnotationScene:
     def __init__(self, scene_point_cloud, scene_num, image_num):
-        self.bin_scene = scene_point_cloud
+        self.annotation_scene = scene_point_cloud
         self.scene_num = scene_num
         self.image_num = image_num
 
@@ -52,15 +52,18 @@ class Settings:
     def __init__(self):
         self.bg_color = gui.Color(1, 1, 1)
         self.show_axes = False
+        self.highlight_obj = True
 
         self.apply_material = True  # clear to False after processing
-        self._materials = {
-            Settings.UNLIT: rendering.MaterialRecord()
-        }
-        self._materials[Settings.UNLIT].base_color = [0.9, 0.9, 0.9, 1.0]
-        self._materials[Settings.UNLIT].shader = Settings.UNLIT
 
-        self.material = self._materials[Settings.UNLIT]
+        self.scene_material = rendering.MaterialRecord()
+        self.scene_material.base_color = [0.9, 0.9, 0.9, 1.0]
+        self.scene_material.shader = Settings.UNLIT
+
+        self.annotation_obj_material = rendering.MaterialRecord()
+        self.annotation_obj_material.base_color = [0.9, 0.1, 0.1, 1.0]
+        self.annotation_obj_material.shader = Settings.UNLIT
+
 
 class AppWindow:
     MENU_OPEN = 1
@@ -83,11 +86,12 @@ class AppWindow:
         self._scene.scene.show_axes(self.settings.show_axes)
 
         if self.settings.apply_material:
-            self._scene.scene.update_material(self.settings.material)
+            self._scene.scene.modify_geometry_material("annotation_scene", self.settings.scene_material)
             self.settings.apply_material = False
 
         self._show_axes.checked = self.settings.show_axes
-        self._point_size.double_value = self.settings.material.point_size
+        self._highlight_obj.checked = self.settings.highlight_obj
+        self._point_size.double_value = self.settings.scene_material.point_size
 
     def _on_layout(self, layout_context):
         r = self.window.content_rect
@@ -126,6 +130,10 @@ class AppWindow:
         self._show_axes = gui.Checkbox("Show axes")
         self._show_axes.set_on_checked(self._on_show_axes)
         view_ctrls.add_child(self._show_axes)
+
+        self._highlight_obj = gui.Checkbox("Highligh annotation objects")
+        self._highlight_obj.set_on_checked(self._on_highlight_obj)
+        view_ctrls.add_child(self._highlight_obj)
 
         self._point_size = gui.Slider(gui.Slider.INT)
         self._point_size.set_limits(1, 5)
@@ -294,7 +302,7 @@ class AppWindow:
             active_obj.obj_geometry.transform(h_transform)
             center = active_obj.obj_geometry.get_center()
             self._scene.scene.remove_geometry(active_obj.obj_name)
-            self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+            self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.annotation_obj_material, add_downsampled_copy_for_fast_rendering=True)
             # update values stored of object
             active_obj.transform = np.matmul(h_transform, active_obj.transform)
 
@@ -310,31 +318,31 @@ class AppWindow:
                 elif event.key == gui.KeyName.H:
                     print("H pressed: translate in -ve X direction")
                     move(-dist, 0, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.COMMA:
+                elif event.key == gui.KeyName.J:
                     print("Comma pressed: translate in +ve Y direction")
                     move(0, dist, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.I:
+                elif event.key == gui.KeyName.K:
                     print("I pressed: translate in -ve Y direction")
                     move(0, -dist, 0, 0, 0, 0)
-                elif event.key == gui.KeyName.K:
+                elif event.key == gui.KeyName.COMMA:
                     print("K pressed: translate in +ve Z direction")
                     move(0, 0, dist, 0, 0, 0)
-                elif event.key == gui.KeyName.J:
+                elif event.key == gui.KeyName.I:
                     print("J pressed: translate in -ve Z direction")
                     move(0, 0, -dist, 0, 0, 0)
             # Rotation - keystrokes are not in same order as translation to make movement more human intuitive
             else:
                 print("Left-Shift is clicked; rotation mode")
-                if event.key == gui.KeyName.L:
+                if event.key == gui.KeyName.K:
                     print("L pressed: rotate around +ve X direction")
                     move(0, 0, 0, 0, 0, deg * np.pi / 180)
-                elif event.key == gui.KeyName.H:
+                elif event.key == gui.KeyName.J:
                     print("H pressed: rotate around -ve X direction")
                     move(0, 0, 0, 0, 0, -deg * np.pi / 180)
-                elif event.key == gui.KeyName.J:
+                elif event.key == gui.KeyName.H:
                     print("K pressed: rotate around +ve Y direction")
                     move(0, 0, 0, 0, deg * np.pi / 180, 0)
-                elif event.key == gui.KeyName.K:
+                elif event.key == gui.KeyName.L:
                     print("J pressed: rotate around -ve Y direction")
                     move(0, 0, 0, 0, -deg * np.pi / 180, 0)
                 elif event.key == gui.KeyName.COMMA:
@@ -354,7 +362,7 @@ class AppWindow:
             self._on_error("No objects are highlighted in scene meshes")
             return gui.Widget.EventCallbackResult.HANDLED
 
-        target = self._annotation_scene.bin_scene
+        target = self._annotation_scene.annotation_scene
         objects = self._annotation_scene.get_objects()
         active_obj = objects[self._meshes_used.selected_index]
         source = active_obj.obj_geometry
@@ -371,7 +379,7 @@ class AppWindow:
         active_obj.obj_geometry.transform(reg.transformation)
         #active_obj.obj_geometry.paint_uniform_color([0,1,0])  # Debug
         self._scene.scene.remove_geometry(active_obj.obj_name)
-        self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+        self._scene.scene.add_geometry(active_obj.obj_name, active_obj.obj_geometry, self.settings.annotation_obj_material, add_downsampled_copy_for_fast_rendering=True)
         active_obj.transform = np.matmul(reg.transformation, active_obj.transform)
 
     def _on_generate(self):
@@ -423,8 +431,22 @@ class AppWindow:
         self.settings.show_axes = show
         self._apply_settings()
 
+    def _on_highlight_obj(self, light):
+        self.settings.highlight_obj = light
+        if light:
+            self.settings.annotation_obj_material.base_color = [0.9, 0.1, 0.1, 1.0]
+        elif not light:
+                self.settings.annotation_obj_material.base_color = [0.9, 0.9, 0.9, 1.0]
+
+        self._apply_settings()
+
+        # update current object visualization
+        meshes = self._annotation_scene.get_objects()
+        for mesh in meshes:
+            self._scene.scene.modify_geometry_material(mesh.obj_name, self.settings.annotation_obj_material)
+
     def _on_point_size(self, size):
-        self.settings.material.point_size = int(size)
+        self.settings.scene_material.point_size = int(size)
         self.settings.apply_material = True
         self._apply_settings()
 
@@ -486,7 +508,7 @@ class AppWindow:
         object_geometry.transform(init_trans)
         new_mesh_instance = self._obj_instance_count(self._meshes_available.selected_value,meshes)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + str(new_mesh_instance)
-        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+        self._scene.scene.add_geometry(new_mesh_name, object_geometry, self.settings.annotation_obj_material, add_downsampled_copy_for_fast_rendering=True)
         self._annotation_scene.add_obj(object_geometry, new_mesh_name, new_mesh_instance, transform=init_trans)
         meshes = self._annotation_scene.get_objects()  # update list after adding current object
         meshes = [i.obj_name for i in meshes]
@@ -553,7 +575,7 @@ class AppWindow:
             print("[WARNING] Failed to read points")
 
         try:
-            self._scene.scene.add_geometry("__model__", geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+            self._scene.scene.add_geometry("annotation_scene", geometry, self.settings.scene_material, add_downsampled_copy_for_fast_rendering=True)
             bounds = geometry.get_axis_aligned_bounding_box()
             self._scene.setup_camera(60, bounds, bounds.get_center())
             center = np.array([0, 0, 0])
@@ -592,7 +614,7 @@ class AppWindow:
                     obj_geometry.translate(transform_cam_to_obj[0:3,3])
                     center = obj_geometry.get_center()
                     obj_geometry.rotate(transform_cam_to_obj[0:3, 0:3], center=center)
-                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.material, add_downsampled_copy_for_fast_rendering=True)
+                    self._scene.scene.add_geometry(obj_name, obj_geometry, self.settings.annotation_obj_material, add_downsampled_copy_for_fast_rendering=True)
                     active_meshes.append(obj_name)
             self._meshes_used.set_items(active_meshes)
 
