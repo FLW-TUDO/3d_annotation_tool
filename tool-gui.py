@@ -61,7 +61,7 @@ class Settings:
         self.scene_material.shader = Settings.UNLIT
 
         self.annotation_obj_material = rendering.MaterialRecord()
-        self.annotation_obj_material.base_color = [0.9, 0.1, 0.1, 1.0]
+        self.annotation_obj_material.base_color = [0.9, 0.3, 0.3, 1.0]
         self.annotation_obj_material.shader = Settings.UNLIT
 
 
@@ -388,10 +388,14 @@ class AppWindow:
 
         json_6d_path = os.path.join(self.scenes.scenes_path, f"{self._annotation_scene.scene_num:06}", "scene_gt.json")
 
-        with open(json_6d_path, "r") as gt_scene:
-            gt_6d_pose_data = json.load(gt_scene)
+        if os.path.exists(json_6d_path):
+            with open(json_6d_path, "r") as gt_scene:
+                gt_6d_pose_data = json.load(gt_scene)
+        else:
+            gt_6d_pose_data = {}
 
-        # generate "scene_gt.json": write 6D annotation for each object in all view angles
+
+        # wrtie/update "scene_gt.json"
         with open(json_6d_path, 'w+') as gt_scene:
             view_angle_data = list()
             for obj in self._annotation_scene.get_objects():
@@ -407,6 +411,8 @@ class AppWindow:
                 view_angle_data.append(obj_data)
             gt_6d_pose_data[str(image_num)] = view_angle_data
             json.dump(gt_6d_pose_data, gt_scene)
+
+        self._annotation_changed = False
 
     def _on_error(self, err_msg):
         dlg = gui.Dialog("Error")
@@ -434,7 +440,7 @@ class AppWindow:
     def _on_highlight_obj(self, light):
         self.settings.highlight_obj = light
         if light:
-            self.settings.annotation_obj_material.base_color = [0.9, 0.1, 0.1, 1.0]
+            self.settings.annotation_obj_material.base_color = [0.9, 0.3, 0.3, 1.0]
         elif not light:
                 self.settings.annotation_obj_material.base_color = [0.9, 0.9, 0.9, 1.0]
 
@@ -504,7 +510,9 @@ class AppWindow:
         object_geometry = o3d.io.read_point_cloud(self.scenes.objects_path + '/obj_' + f'{self._meshes_available.selected_index+1:06}' + '.ply')
         object_geometry.points = o3d.utility.Vector3dVector(np.array(object_geometry.points) / 1000)  # convert mm to meter
         init_trans = np.identity(4)
-        init_trans[2, 3] = 0.2
+        center = self._annotation_scene.annotation_scene.get_center()
+        center[2] -= 0.2
+        init_trans[0:3, 3] = center
         object_geometry.transform(init_trans)
         new_mesh_instance = self._obj_instance_count(self._meshes_available.selected_value,meshes)
         new_mesh_name = str(self._meshes_available.selected_value) + '_' + str(new_mesh_instance)
