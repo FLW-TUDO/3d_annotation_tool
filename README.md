@@ -9,6 +9,11 @@ The tool uses open3D library for both the processing and the gui. The tool can b
 
 After annotating your dataset with the tool, use [The BOP toolkit](https://github.com/thodan/bop_toolkit) to generate 2D segmentation mask images and COCO json annotations if needed.
 
+
+## Note
+
+This tool was pushed to the [BOP toolkit repo](https://github.com/thodan/bop_toolkit). It is better to use it from there.
+
 ## Interface:
 I, jk hl  are used to control direction
 
